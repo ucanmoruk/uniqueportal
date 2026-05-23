@@ -64,7 +64,7 @@ export function DestekTable({ rows }: { rows: DestekListItem[] }) {
     <SmartTable
       rows={rows}
       columns={columns}
-      rowKey={(r) => r.TALEP_ID}
+      rowKey={(r, idx) => `${r.TALEP_ID}-${idx}`}
       searchPlaceholder="Talep no, konu, oluşturan…"
       emptyMessage="Henüz destek talebi yok."
       rowHref={(r) => `/destek/${r.TALEP_ID}`}

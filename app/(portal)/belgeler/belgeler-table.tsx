@@ -87,7 +87,7 @@ export function BelgelerTable({ rows }: { rows: RaporListItem[] }) {
     <SmartTable
       rows={rows}
       columns={columns}
-      rowKey={(r) => r.ID}
+      rowKey={(r, idx) => `${r.ID}-${idx}`}
       searchPlaceholder="Belge no, müşteri, dosya adı…"
       emptyMessage="Henüz belge yok."
     />

@@ -72,7 +72,7 @@ export function TekliflerTable({ rows }: { rows: TeklifListItem[] }) {
     <SmartTable
       rows={rows}
       columns={columns}
-      rowKey={(r) => r.ID}
+      rowKey={(r, idx) => `${r.ID}-${idx}`}
       searchPlaceholder="Teklif no, müşteri, proje, açıklama…"
       emptyMessage="Henüz teklif bulunmuyor."
       rowHref={(r) => `/teklifler/${r.ID}`}

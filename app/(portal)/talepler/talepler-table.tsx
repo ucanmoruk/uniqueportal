@@ -66,7 +66,7 @@ export function TaleplerTable({ rows }: { rows: TalepListeItem[] }) {
     <SmartTable
       rows={rows}
       columns={columns}
-      rowKey={(r) => r.ID}
+      rowKey={(r, idx) => `${r.ID}-${idx}`}
       searchPlaceholder="Talep no, müşteri, oluşturan…"
       emptyMessage="Henüz talep bulunmuyor."
       rowHref={(r) => `/talepler/${r.ID}`}

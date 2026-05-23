@@ -91,7 +91,7 @@ export function TerminTable({ rows }: { rows: TerminListItem[] }) {
     <SmartTable
       rows={rows}
       columns={columns}
-      rowKey={(r, idx) => r.nID ?? `${r.ID}-${idx}`}
+      rowKey={(r, idx) => `${r.nID ?? r.ID ?? "x"}-${idx}`}
       searchPlaceholder="Evrak/Rapor no, firma, numune, hizmet…"
       pageSize={50}
       emptyMessage="Henüz termin kaydı yok."

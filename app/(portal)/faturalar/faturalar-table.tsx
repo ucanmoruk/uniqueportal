@@ -81,7 +81,7 @@ export function FaturalarTable({ rows }: { rows: FaturaListItem[] }) {
     <SmartTable
       rows={rows}
       columns={columns}
-      rowKey={(r) => r.ID}
+      rowKey={(r, idx) => `${r.ID}-${idx}`}
       searchPlaceholder="Fatura no, müşteri, proje…"
       emptyMessage="Henüz fatura bulunmuyor."
     />
