@@ -5,6 +5,7 @@ import { signOut } from "@/lib/auth";
 import { requireUser } from "@/lib/auth";
 import { LogOut, FlaskConical } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { ThemeToggle } from "@/components/theme-toggle";
 
 async function handleSignOut() {
   "use server";
@@ -56,6 +57,7 @@ export default async function PortalLayout({
               <span className="font-medium">{user.firmaAdi}</span>
               <span className="text-muted-foreground">{user.kod}</span>
             </div>
+            <ThemeToggle />
             <form action={handleSignOut}>
               <Button variant="ghost" size="icon" type="submit" title="Çıkış">
                 <LogOut className="size-4" />

@@ -7,8 +7,8 @@ export async function findFirmaByKod(kod: string): Promise<Firma | null> {
             Adres, Telefon, Mail, Vergi_Dairesi, Vergi_No, Durum, Sektor,
             Hizmet, Vade, Odeme
      FROM Firma
-     WHERE Kod = @kod`,
-    { kod }
+     WHERE LTRIM(RTRIM(Kod)) = @kod`,
+    { kod: kod.trim() }
   );
 }
 

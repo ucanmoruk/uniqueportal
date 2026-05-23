@@ -30,6 +30,9 @@ export function LoginForm() {
           required
           autoFocus
         />
+        <p className="text-[11px] text-muted-foreground">
+          Mevcut portaldaki firma kodunuz (UQ + 5 rakam) ve parolanızla giriş yapın.
+        </p>
       </div>
 
       <div className="space-y-2">

@@ -36,12 +36,30 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       },
       async authorize(credentials) {
         const kod = (credentials?.kod as string | undefined)?.trim();
-        const parola = credentials?.parola as string | undefined;
-        if (!kod || !parola) return null;
+        const parola = (credentials?.parola as string | undefined)?.trim();
+        if (!kod || !parola) {
+          console.log("[auth] eksik kod/parola");
+          return null;
+        }
 
         const firma = await findFirmaByKod(kod);
-        if (!firma) return null;
-        if ((firma.Parola ?? "") !== parola) return null;
+        if (!firma) {
+          console.log(`[auth] kod bulunamadı: '${kod}'`);
+          return null;
+        }
+
+        const dbParola = (firma.Parola ?? "").trim();
+        if (dbParola !== parola) {
+          console.log(
+            `[auth] parola eşleşmedi kod='${firma.Kod}' ` +
+              `db_len=${dbParola.length} verilen_len=${parola.length}`
+          );
+          return null;
+        }
+
+        console.log(
+          `[auth] giriş başarılı: kod='${firma.Kod}' firma='${firma.Firma_Adi}' tur='${firma.Tur}'`
+        );
 
         return {
           id: String(firma.ID),

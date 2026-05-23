@@ -5,8 +5,9 @@ import { Card, CardContent } from "@/components/ui/card";
 import { DataTable, type ColumnDef } from "@/components/data-table";
 import { PageHeader } from "@/components/page-header";
 import { StatusBadge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { formatDate } from "@/lib/utils";
-import { ChevronRight } from "lucide-react";
+import { ChevronRight, Plus } from "lucide-react";
 import type { TalepListeItem } from "@/lib/repositories/talep";
 
 export const dynamic = "force-dynamic";
@@ -59,6 +60,13 @@ export default async function TaleplerPage() {
       <PageHeader
         title="Talepler"
         description={`Toplam ${rows.length} talep listeleniyor.`}
+        actions={
+          <Button size="sm" asChild>
+            <Link href="/talepler/yeni">
+              <Plus className="size-4" /> Yeni Talep
+            </Link>
+          </Button>
+        }
       />
       <Card>
         <CardContent className="p-0">
