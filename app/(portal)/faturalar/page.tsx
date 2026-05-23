@@ -1,14 +1,9 @@
 import { requireUser } from "@/lib/auth";
-import {
-  listFaturalar,
-  getFaturaOzet,
-  type FaturaListItem,
-} from "@/lib/repositories/fatura";
+import { listFaturalar, getFaturaOzet } from "@/lib/repositories/fatura";
 import { Card, CardContent } from "@/components/ui/card";
-import { DataTable, type ColumnDef } from "@/components/data-table";
 import { PageHeader } from "@/components/page-header";
-import { StatusBadge } from "@/components/ui/badge";
-import { formatDate, formatTL } from "@/lib/utils";
+import { formatTL } from "@/lib/utils";
+import { FaturalarTable } from "./faturalar-table";
 
 export const dynamic = "force-dynamic";
 
@@ -23,63 +18,11 @@ export default async function FaturalarPage() {
   const odenen = Number(ozet?.odenen ?? 0);
   const bakiye = ciro - odenen;
 
-  const columns: ColumnDef<FaturaListItem>[] = [
-    {
-      key: "no",
-      header: "Fatura No",
-      cell: (r) => <span className="font-medium">{r["Fatura No"]}</span>,
-    },
-    {
-      key: "tarih",
-      header: "Tarih",
-      cell: (r) => (
-        <span className="text-muted-foreground">{formatDate(r.Tarih)}</span>
-      ),
-    },
-    { key: "musteri", header: "Müşteri", cell: (r) => r["Müşteri"] ?? "—" },
-    { key: "proje", header: "Proje", cell: (r) => r.Proje ?? "—" },
-    {
-      key: "tutar",
-      header: "Tutar",
-      align: "right",
-      cell: (r) => (
-        <span className="tabular-nums text-muted-foreground">
-          {formatTL(Number(r.Tutar))}
-        </span>
-      ),
-    },
-    {
-      key: "kdv",
-      header: "KDV",
-      align: "right",
-      cell: (r) => (
-        <span className="tabular-nums text-muted-foreground">
-          {formatTL(Number(r.KDV))}
-        </span>
-      ),
-    },
-    {
-      key: "toplam",
-      header: "Toplam",
-      align: "right",
-      cell: (r) => (
-        <span className="tabular-nums font-medium">
-          {formatTL(Number(r.Toplam))}
-        </span>
-      ),
-    },
-    {
-      key: "odeme",
-      header: "Ödeme",
-      cell: (r) => <StatusBadge value={r["Ödeme"]} />,
-    },
-  ];
-
   return (
     <>
       <PageHeader
         title="Faturalar"
-        description={`Toplam ${rows.length} fatura listeleniyor.`}
+        description={`Toplam ${rows.length} fatura.`}
       />
 
       <div className="grid gap-4 sm:grid-cols-3 mb-6">
@@ -92,16 +35,7 @@ export default async function FaturalarPage() {
         />
       </div>
 
-      <Card>
-        <CardContent className="p-0">
-          <DataTable
-            rows={rows}
-            columns={columns}
-            rowKey={(r) => r.ID}
-            emptyMessage="Henüz fatura bulunmuyor."
-          />
-        </CardContent>
-      </Card>
+      <FaturalarTable rows={rows} />
     </>
   );
 }

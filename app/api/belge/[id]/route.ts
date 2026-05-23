@@ -4,6 +4,67 @@ import { findRaporForUser } from "@/lib/repositories/rapor";
 
 export const dynamic = "force-dynamic";
 
+const LEGACY_BASE = (
+  process.env.LEGACY_PORTAL_URL ?? "https://portal.uqtest.com"
+).replace(/\/+$/, "");
+
+/**
+ * Belge PDF'ini eski portal sunucusundan çeker ve inline olarak servisle.
+ * Adresler:
+ *  - {LEGACY}/{Yol}                 → direkt statik dosya (öncelikli)
+ *  - {LEGACY}/serve-pdf.php?file=NAME → inline serve fallback
+ */
+async function fetchPdf(yol: string, dosyaAdi: string | null) {
+  const candidates: string[] = [];
+  const trimmed = yol.trim().replace(/^\/+/, "");
+
+  // 1) Direkt yol
+  candidates.push(`${LEGACY_BASE}/${trimmed}`);
+  // 2) "upload/" ile başlamıyorsa upload/ ile dene
+  if (!trimmed.toLowerCase().startsWith("upload/")) {
+    candidates.push(`${LEGACY_BASE}/upload/${trimmed}`);
+  }
+  // 3) serve-pdf.php ile sadece dosya adı
+  const base = (dosyaAdi || trimmed.split("/").pop() || "").trim();
+  if (base) {
+    candidates.push(
+      `${LEGACY_BASE}/serve-pdf.php?file=${encodeURIComponent(base)}`
+    );
+  }
+
+  for (const url of candidates) {
+    try {
+      const resp = await fetch(url, {
+        redirect: "follow",
+        // Bazı sunucular User-Agent zorunlu kılar
+        headers: {
+          "User-Agent":
+            "Mozilla/5.0 (compatible; UniquePortalProxy/1.0; +https://uqtest.com)",
+          Accept: "application/pdf,application/octet-stream,*/*",
+        },
+      });
+      if (!resp.ok) continue;
+      const ct = resp.headers.get("content-type") ?? "";
+      if (
+        ct.toLowerCase().includes("text/html") &&
+        !ct.toLowerCase().includes("pdf")
+      ) {
+        // HTML hata sayfası gelmiş, atla
+        continue;
+      }
+      const buf = Buffer.from(await resp.arrayBuffer());
+      // PDF magic byte kontrolü (%PDF-)
+      if (buf.length < 5 || !buf.subarray(0, 5).toString().startsWith("%PDF-")) {
+        continue;
+      }
+      return { buf, source: url };
+    } catch {
+      continue;
+    }
+  }
+  return null;
+}
+
 export async function GET(
   _req: Request,
   { params }: { params: Promise<{ id: string }> }
@@ -23,17 +84,37 @@ export async function GET(
 
   const rapor = await findRaporForUser(user, numId);
   if (!rapor) {
-    return new NextResponse("Belge bulunamadı.", { status: 404 });
+    return new NextResponse("Belge bulunamadı veya erişim yetkiniz yok.", {
+      status: 404,
+    });
   }
 
-  // Eski PHP portalındaki dosyalar farklı bir sunucuda — Vercel'den okunamaz.
-  // Bu endpoint şimdilik kullanıcıyı orijinal PHP portalının indirme adresine
-  // yönlendiriyor. PDF'leri Vercel Blob / S3'e taşıma sonradan eklenecek.
-  const legacyBase =
-    process.env.LEGACY_PORTAL_URL?.replace(/\/+$/, "") ||
-    "https://portal.uqtest.com";
-  const dx = Buffer.from(String(numId)).toString("base64");
-  const url = `${legacyBase}/download-2.php?dx=${encodeURIComponent(dx)}`;
+  if (!rapor.Yol) {
+    return new NextResponse("Bu belgenin dosya yolu kayıtlı değil.", {
+      status: 404,
+    });
+  }
 
-  return NextResponse.redirect(url, 302);
+  const result = await fetchPdf(rapor.Yol, rapor["Dosya Adı"]);
+  if (!result) {
+    return new NextResponse(
+      "PDF dosyasına erişilemedi. Lütfen daha sonra tekrar deneyin.",
+      { status: 502 }
+    );
+  }
+
+  const niceName = (rapor["Dosya Adı"] || `belge-${numId}.pdf`)
+    .replace(/[^a-zA-Z0-9._-]+/g, "_")
+    .replace(/\.+pdf$/i, ".pdf");
+
+  return new NextResponse(new Uint8Array(result.buf), {
+    status: 200,
+    headers: {
+      "Content-Type": "application/pdf",
+      "Content-Length": String(result.buf.length),
+      "Content-Disposition": `inline; filename="${niceName}"`,
+      "Cache-Control": "private, max-age=300",
+      "X-Content-Type-Options": "nosniff",
+    },
+  });
 }
