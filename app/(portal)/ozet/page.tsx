@@ -149,123 +149,73 @@ export default async function OzetPage() {
           </Link>
         </CardHeader>
         <CardContent className="p-0">
-          {recents.length === 0 ? (
-            <div className="px-6 py-12 text-center text-sm text-muted-foreground">
-              Henüz talep bulunmuyor.
-            </div>
-          ) : (
-            <>
-              {/* Mobile card list */}
-              <ul className="md:hidden divide-y">
-                {recents.map((r) => (
-                  <li key={r.ID}>
-                    <Link
-                      href={`/talepler/${r.ID}`}
-                      className="block p-4 space-y-3 active:bg-accent/40"
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="bg-muted/20 text-muted-foreground border-b">
+                <tr className="text-left">
+                  <th className="px-6 py-2.5 font-medium text-xs uppercase tracking-wide">
+                    Talep No
+                  </th>
+                  <th className="px-4 py-2.5 font-medium text-xs uppercase tracking-wide">
+                    Tarih
+                  </th>
+                  <th className="px-4 py-2.5 font-medium text-xs uppercase tracking-wide">
+                    Müşteri
+                  </th>
+                  {showOlusturan && (
+                    <th className="px-4 py-2.5 font-medium text-xs uppercase tracking-wide">
+                      Oluşturan
+                    </th>
+                  )}
+                  <th className="px-4 py-2.5 font-medium text-xs uppercase tracking-wide">
+                    Durum
+                  </th>
+                  <th className="px-6 py-2.5"></th>
+                </tr>
+              </thead>
+              <tbody>
+                {recents.length === 0 ? (
+                  <tr>
+                    <td
+                      colSpan={showOlusturan ? 6 : 5}
+                      className="px-6 py-12 text-center text-muted-foreground"
                     >
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="min-w-0 flex-1">
-                          <div className="text-[10px] uppercase tracking-wider text-muted-foreground mb-0.5">
-                            Talep No
-                          </div>
-                          <div className="text-base font-semibold leading-tight">
-                            {r["Talep No"]}
-                          </div>
-                        </div>
-                        <StatusBadge value={r.Durum} />
-                      </div>
-                      <dl className="grid grid-cols-1 gap-1.5">
-                        <div className="flex items-baseline justify-between gap-3">
-                          <dt className="text-[10px] uppercase tracking-wider text-muted-foreground shrink-0">
-                            Tarih
-                          </dt>
-                          <dd className="text-sm text-right text-muted-foreground">
-                            {formatDate(r.Tarih)}
-                          </dd>
-                        </div>
-                        <div className="flex items-baseline justify-between gap-3">
-                          <dt className="text-[10px] uppercase tracking-wider text-muted-foreground shrink-0">
-                            Müşteri
-                          </dt>
-                          <dd className="text-sm text-right min-w-0 break-words">
-                            {r["Müşteri"] ?? "—"}
-                          </dd>
-                        </div>
-                        {showOlusturan && (
-                          <div className="flex items-baseline justify-between gap-3">
-                            <dt className="text-[10px] uppercase tracking-wider text-muted-foreground shrink-0">
-                              Oluşturan
-                            </dt>
-                            <dd className="text-sm text-right text-muted-foreground">
-                              {r["Talep Oluşturan"] ?? "—"}
-                            </dd>
-                          </div>
-                        )}
-                      </dl>
-                    </Link>
-                  </li>
-                ))}
-              </ul>
-
-              {/* Desktop table */}
-              <div className="hidden md:block overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead className="bg-muted/20 text-muted-foreground border-b">
-                    <tr className="text-left">
-                      <th className="px-6 py-2.5 font-medium text-xs uppercase tracking-wide">
-                        Talep No
-                      </th>
-                      <th className="px-4 py-2.5 font-medium text-xs uppercase tracking-wide">
-                        Tarih
-                      </th>
-                      <th className="px-4 py-2.5 font-medium text-xs uppercase tracking-wide">
-                        Müşteri
-                      </th>
+                      Henüz talep bulunmuyor.
+                    </td>
+                  </tr>
+                ) : (
+                  recents.map((r) => (
+                    <tr
+                      key={r.ID}
+                      className="border-b last:border-b-0 hover:bg-accent/30"
+                    >
+                      <td className="px-6 py-3 font-medium">{r["Talep No"]}</td>
+                      <td className="px-4 py-3 text-muted-foreground">
+                        {formatDate(r.Tarih)}
+                      </td>
+                      <td className="px-4 py-3">{r["Müşteri"] ?? "—"}</td>
                       {showOlusturan && (
-                        <th className="px-4 py-2.5 font-medium text-xs uppercase tracking-wide">
-                          Oluşturan
-                        </th>
-                      )}
-                      <th className="px-4 py-2.5 font-medium text-xs uppercase tracking-wide">
-                        Durum
-                      </th>
-                      <th className="px-6 py-2.5"></th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {recents.map((r) => (
-                      <tr
-                        key={r.ID}
-                        className="border-b last:border-b-0 hover:bg-accent/30"
-                      >
-                        <td className="px-6 py-3 font-medium">{r["Talep No"]}</td>
                         <td className="px-4 py-3 text-muted-foreground">
-                          {formatDate(r.Tarih)}
+                          {r["Talep Oluşturan"] ?? "—"}
                         </td>
-                        <td className="px-4 py-3">{r["Müşteri"] ?? "—"}</td>
-                        {showOlusturan && (
-                          <td className="px-4 py-3 text-muted-foreground">
-                            {r["Talep Oluşturan"] ?? "—"}
-                          </td>
-                        )}
-                        <td className="px-4 py-3">
-                          <StatusBadge value={r.Durum} />
-                        </td>
-                        <td className="px-6 py-3 text-right">
-                          <Link
-                            href={`/talepler/${r.ID}`}
-                            className="text-primary hover:underline text-sm"
-                          >
-                            Detay
-                          </Link>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </>
-          )}
+                      )}
+                      <td className="px-4 py-3">
+                        <StatusBadge value={r.Durum} />
+                      </td>
+                      <td className="px-6 py-3 text-right">
+                        <Link
+                          href={`/talepler/${r.ID}`}
+                          className="text-primary hover:underline text-sm"
+                        >
+                          Detay
+                        </Link>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
         </CardContent>
       </Card>
     </>

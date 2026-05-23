@@ -27,8 +27,6 @@ export interface SmartColumn<T> {
   sortable?: boolean;
   searchable?: boolean;
   className?: string;
-  /** Mobile kart görünümünde gizle (örn: ikincil bilgiler) */
-  hideOnMobileCard?: boolean;
 }
 
 interface SmartTableProps<T> {
@@ -51,10 +49,6 @@ function toComparable(v: unknown): string | number {
   if (v instanceof Date) return v.getTime();
   if (typeof v === "number") return v;
   return String(v).toLocaleLowerCase("tr-TR");
-}
-
-function isActionColumn<T>(c: SmartColumn<T>) {
-  return c.header === "" && (c.sortable === false || !c.accessor);
 }
 
 export function SmartTable<T extends object>({
@@ -122,15 +116,8 @@ export function SmartTable<T extends object>({
     }
   }
 
-  // Mobil kart için kolonları ayır: ilk veri kolonu başlık, son action sağ üst,
-  // diğerleri label/value
-  const actionCol = columns.find(isActionColumn);
-  const dataCols = columns.filter((c) => !isActionColumn(c));
-  const cardPrimary = dataCols[0];
-  const cardRest = dataCols.slice(1).filter((c) => !c.hideOnMobileCard);
-
   return (
-    <div className="border bg-card text-card-foreground overflow-hidden shadow-sm">
+    <div className="rounded-lg border bg-card text-card-foreground overflow-hidden shadow-sm">
       {/* Toolbar */}
       <div className="flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-between px-4 py-3 border-b bg-muted/30">
         <div className="relative w-full sm:max-w-sm">
@@ -177,111 +164,8 @@ export function SmartTable<T extends object>({
         </div>
       </div>
 
-      {/* Mobile card list (< md) */}
-      <div className="md:hidden">
-        {pageRows.length === 0 ? (
-          <div className="px-4 py-16 text-center text-sm text-muted-foreground">
-            {search ? (
-              <>
-                <div className="mb-2">
-                  &quot;<span className="font-medium text-foreground">{search}</span>&quot;
-                  için sonuç yok.
-                </div>
-                <Button variant="link" size="sm" onClick={() => setSearch("")}>
-                  Aramayı temizle
-                </Button>
-              </>
-            ) : (
-              emptyMessage
-            )}
-          </div>
-        ) : (
-          <ul className="divide-y">
-            {pageRows.map((row, idx) => {
-              const href = rowHref?.(row);
-              const handleClick =
-                href != null
-                  ? (e: React.MouseEvent | React.KeyboardEvent) => {
-                      const t = e.target as HTMLElement;
-                      if (t.closest("a,button,input,select,textarea")) return;
-                      router.push(href);
-                    }
-                  : undefined;
-
-              return (
-                <li
-                  key={rowKey(row, start + idx)}
-                  className={cn(
-                    "p-4 space-y-3",
-                    href && "active:bg-accent/40 cursor-pointer"
-                  )}
-                  onClick={handleClick}
-                  onKeyDown={(e) => {
-                    if (handleClick && (e.key === "Enter" || e.key === " ")) {
-                      e.preventDefault();
-                      handleClick(e);
-                    }
-                  }}
-                  role={href ? "button" : undefined}
-                  tabIndex={href ? 0 : undefined}
-                >
-                  {/* Üst satır: birincil değer + action */}
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0 flex-1">
-                      <div className="text-[10px] uppercase tracking-wider text-muted-foreground mb-0.5">
-                        {cardPrimary?.header}
-                      </div>
-                      <div className="text-base font-semibold leading-tight">
-                        {cardPrimary
-                          ? cardPrimary.cell
-                            ? cardPrimary.cell(row)
-                            : ((row as unknown as Record<string, React.ReactNode>)[
-                                cardPrimary.key
-                              ] ?? "—")
-                          : "—"}
-                      </div>
-                    </div>
-                    {actionCol && (
-                      <div className="shrink-0">
-                        {actionCol.cell ? actionCol.cell(row) : null}
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Diğer alanlar */}
-                  {cardRest.length > 0 && (
-                    <dl className="grid grid-cols-1 gap-1.5">
-                      {cardRest.map((c) => {
-                        const val = c.cell
-                          ? c.cell(row)
-                          : ((row as unknown as Record<string, React.ReactNode>)[
-                              c.key
-                            ] ?? null);
-                        return (
-                          <div
-                            key={c.key}
-                            className="flex items-baseline justify-between gap-3"
-                          >
-                            <dt className="text-[10px] uppercase tracking-wider text-muted-foreground shrink-0">
-                              {c.header}
-                            </dt>
-                            <dd className="text-sm text-right min-w-0 break-words">
-                              {val}
-                            </dd>
-                          </div>
-                        );
-                      })}
-                    </dl>
-                  )}
-                </li>
-              );
-            })}
-          </ul>
-        )}
-      </div>
-
-      {/* Desktop table (md+) */}
-      <div className="hidden md:block overflow-x-auto">
+      {/* Table */}
+      <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead className="bg-muted/20 text-muted-foreground border-b">
             <tr className="text-left">
@@ -338,7 +222,11 @@ export function SmartTable<T extends object>({
                           {search}
                         </span>&quot; için sonuç bulunamadı.
                       </span>
-                      <Button variant="link" size="sm" onClick={() => setSearch("")}>
+                      <Button
+                        variant="link"
+                        size="sm"
+                        onClick={() => setSearch("")}
+                      >
                         Aramayı temizle
                       </Button>
                     </div>
@@ -404,9 +292,8 @@ export function SmartTable<T extends object>({
       {totalPages > 1 && (
         <div className="flex items-center justify-between gap-2 px-4 py-3 border-t bg-muted/30 text-sm">
           <div className="text-muted-foreground">
-            <span className="hidden sm:inline">Sayfa </span>
-            <span className="font-medium text-foreground">{safePage}</span> /{" "}
-            {totalPages}
+            Sayfa <span className="font-medium text-foreground">{safePage}</span>{" "}
+            / {totalPages}
           </div>
           <div className="flex items-center gap-1">
             <Button
@@ -415,7 +302,7 @@ export function SmartTable<T extends object>({
               onClick={() => setPage(1)}
               disabled={safePage === 1}
               aria-label="İlk sayfa"
-              className="bg-background hidden sm:inline-flex"
+              className="bg-background"
             >
               <ChevronsLeft className="size-4" />
             </Button>
@@ -445,7 +332,7 @@ export function SmartTable<T extends object>({
               onClick={() => setPage(totalPages)}
               disabled={safePage === totalPages}
               aria-label="Son sayfa"
-              className="bg-background hidden sm:inline-flex"
+              className="bg-background"
             >
               <ChevronsRight className="size-4" />
             </Button>
