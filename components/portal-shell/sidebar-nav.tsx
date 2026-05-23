@@ -66,7 +66,7 @@ function NavContent({ user, signOutAction }: Props) {
     .toUpperCase();
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col h-full w-full overflow-hidden">
       {/* Brand */}
       <div className="px-5 py-5 border-b border-sidebar-border">
         <Link href="/ozet" className="flex items-center gap-2.5">
@@ -198,10 +198,8 @@ export function SidebarShell({ user, signOutAction, children }: Props & { childr
   return (
     <div className="min-h-screen bg-background lg:grid lg:grid-cols-[256px_minmax(0,1fr)]">
       {/* Desktop sidebar - fixed in grid column */}
-      <aside className="hidden lg:flex bg-sidebar text-sidebar-foreground border-r border-sidebar-border lg:sticky lg:top-0 lg:h-screen">
-        <div className="flex w-64 h-full">
-          <NavContent user={user} signOutAction={signOutAction} />
-        </div>
+      <aside className="hidden lg:block bg-sidebar text-sidebar-foreground border-r border-sidebar-border lg:sticky lg:top-0 lg:h-screen overflow-hidden">
+        <NavContent user={user} signOutAction={signOutAction} />
       </aside>
 
       {/* Main column */}
