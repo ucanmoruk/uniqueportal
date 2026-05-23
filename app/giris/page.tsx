@@ -1,6 +1,6 @@
 import { Suspense } from "react";
 import { LoginForm } from "./login-form";
-import { FlaskConical, ShieldCheck, FileCheck2, Headphones } from "lucide-react";
+import { FlaskConical } from "lucide-react";
 
 export const metadata = {
   title: "Giriş — UNIQUE Services Portal",
@@ -8,81 +8,87 @@ export const metadata = {
 
 export default function LoginPage() {
   return (
-    <div className="min-h-screen w-full grid lg:grid-cols-[1fr_minmax(420px,520px)] bg-background">
-      {/* Sol panel — marka + değer önerisi */}
-      <div className="relative hidden lg:flex items-center justify-center bg-sidebar text-sidebar-foreground overflow-hidden">
+    <div className="min-h-screen w-full grid lg:grid-cols-[1.1fr_minmax(440px,520px)] bg-background">
+      {/* Sol panel — UNIQUE marka mesajı (Webflow tarzı) */}
+      <div className="relative hidden lg:flex items-center bg-sidebar text-sidebar-foreground overflow-hidden">
         <div
-          className="absolute inset-0 opacity-[0.07]"
+          className="absolute inset-0 opacity-[0.06]"
           style={{
             backgroundImage:
               "radial-gradient(circle at 1px 1px, white 1px, transparent 0)",
-            backgroundSize: "28px 28px",
+            backgroundSize: "24px 24px",
           }}
         />
-        <div className="relative z-10 max-w-md px-12">
-          <div className="mb-10 inline-flex items-center gap-3">
-            <span className="inline-flex items-center justify-center w-11 h-11 rounded-md bg-sidebar-primary text-sidebar-primary-foreground">
+        <div className="relative z-10 px-16 max-w-2xl">
+          {/* Marka */}
+          <div className="mb-14 inline-flex items-center gap-3">
+            <span className="inline-flex items-center justify-center w-11 h-11 bg-sidebar-primary text-sidebar-primary-foreground">
               <FlaskConical className="size-6" />
             </span>
             <div className="leading-tight">
-              <div className="text-lg font-semibold">UNIQUE</div>
-              <div className="text-xs text-sidebar-muted tracking-wide">
+              <div className="text-lg font-bold tracking-tight">UNIQUE</div>
+              <div className="text-[10px] uppercase tracking-[0.16em] text-sidebar-muted">
                 Services Portal
               </div>
             </div>
           </div>
 
-          <h1 className="text-3xl font-semibold leading-snug mb-4 tracking-tight">
-            Test, analiz ve raporlama süreçlerinizi tek bir ekrandan yönetin.
+          {/* Eyebrow */}
+          <div className="mb-6 text-[10px] font-semibold tracking-[0.18em] uppercase text-sidebar-primary">
+            ▸ Müşteri Portalı
+          </div>
+
+          {/* Hero başlık */}
+          <h1 className="text-[clamp(2rem,1.5rem+2vw,3.25rem)] font-bold uppercase leading-[1.05] tracking-tight mb-7">
+            Formülden
+            <br />
+            bildirime,
+            <br />
+            <span className="text-sidebar-primary">tek çözüm.</span>
           </h1>
-          <p className="text-sidebar-muted text-base leading-relaxed">
-            UNIQUE Analiz Belgelendirme ve Gözetim Hizmetleri olarak müşterilerimize
-            sunduğumuz kozmetik test hizmetleri için modern müşteri portalına hoş
-            geldiniz.
+
+          {/* Alt açıklama */}
+          <p className="text-sidebar-muted text-base leading-relaxed max-w-md mb-10">
+            Kozmetik test ve analiz süreçlerinizi UNIQUE müşteri portalı ile
+            tek bir ekrandan yönetin. Talepleriniz, raporlarınız, teklifleriniz
+            ve cari hesabınız anlık erişiminizde.
           </p>
 
-          <div className="mt-10 space-y-4">
-            <Feature
-              icon={FileCheck2}
-              title="Test raporu erişimi"
-              desc="Tamamlanan analizlere ait raporlarınızı online görüntüleyin."
-            />
-            <Feature
-              icon={ShieldCheck}
-              title="Güvenli teklif onayı"
-              desc="Aldığınız teklifleri inceleyip dijital olarak onaylayın."
-            />
-            <Feature
-              icon={Headphones}
-              title="Anlık destek"
-              desc="Süreciniz boyunca uzman ekibimize doğrudan ulaşın."
-            />
+          {/* Alt etiket */}
+          <div className="flex items-center gap-3 text-[11px] uppercase tracking-[0.16em] text-sidebar-muted">
+            <span className="size-1.5 bg-sidebar-primary" />
+            <span>Powered by UNIQUE Test &amp; Compliance Protocol</span>
           </div>
         </div>
       </div>
 
       {/* Sağ panel — login formu */}
       <div className="flex items-center justify-center p-6 sm:p-12 bg-background">
-        <div className="w-full max-w-sm space-y-8">
-          <div className="lg:hidden">
-            <div className="inline-flex items-center gap-2.5">
-              <span className="inline-flex items-center justify-center w-10 h-10 rounded-md bg-primary text-primary-foreground">
+        <div className="w-full max-w-sm">
+          <div className="lg:hidden mb-10">
+            <div className="inline-flex items-center gap-3">
+              <span className="inline-flex items-center justify-center w-10 h-10 bg-primary text-primary-foreground">
                 <FlaskConical className="size-5" />
               </span>
               <div className="leading-tight">
-                <div className="font-semibold">UNIQUE</div>
-                <div className="text-[11px] text-muted-foreground">
+                <div className="font-bold tracking-tight">UNIQUE</div>
+                <div className="text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
                   Services Portal
                 </div>
               </div>
             </div>
           </div>
 
-          <div>
-            <h2 className="text-2xl font-semibold tracking-tight">
-              Portala giriş yapın
+          <div className="mb-10">
+            <div className="text-[10px] uppercase tracking-[0.18em] text-primary font-semibold mb-3">
+              ▸ Giriş
+            </div>
+            <h2 className="text-2xl font-bold uppercase tracking-tight leading-tight">
+              Portala
+              <br />
+              giriş yapın
             </h2>
-            <p className="text-muted-foreground mt-2 text-sm">
+            <p className="text-muted-foreground mt-3 text-sm">
               Devam etmek için firma kodunuz ve parolanız ile oturum açın.
             </p>
           </div>
@@ -91,35 +97,14 @@ export default function LoginPage() {
             <LoginForm />
           </Suspense>
 
-          <p className="text-xs text-muted-foreground text-center pt-6 border-t">
-            Hesabınızla ilgili bir sorun mu var?{" "}
-            <span className="text-foreground font-medium">
-              Müşteri temsilcinizle iletişime geçin.
-            </span>
+          <p className="text-[11px] uppercase tracking-[0.14em] text-muted-foreground text-center pt-10 mt-10 border-t">
+            Bir sorun mu var?{" "}
+            <span className="text-foreground font-semibold">
+              Müşteri temsilciniz
+            </span>{" "}
+            ile iletişime geçin
           </p>
         </div>
-      </div>
-    </div>
-  );
-}
-
-function Feature({
-  icon: Icon,
-  title,
-  desc,
-}: {
-  icon: React.ComponentType<{ className?: string }>;
-  title: string;
-  desc: string;
-}) {
-  return (
-    <div className="flex gap-3">
-      <span className="inline-flex shrink-0 items-center justify-center size-9 rounded-md bg-sidebar-accent text-sidebar-foreground">
-        <Icon className="size-4" />
-      </span>
-      <div>
-        <div className="text-sm font-medium">{title}</div>
-        <div className="text-xs text-sidebar-muted leading-relaxed">{desc}</div>
       </div>
     </div>
   );

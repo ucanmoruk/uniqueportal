@@ -69,15 +69,15 @@ function NavContent({ user, signOutAction }: Props) {
     <div className="flex flex-col h-full w-full overflow-hidden">
       {/* Brand */}
       <div className="px-5 py-5 border-b border-sidebar-border">
-        <Link href="/ozet" className="flex items-center gap-2.5">
-          <span className="inline-flex items-center justify-center size-9 rounded-md bg-sidebar-primary text-sidebar-primary-foreground">
+        <Link href="/ozet" className="flex items-center gap-3">
+          <span className="inline-flex items-center justify-center size-9 bg-sidebar-primary text-sidebar-primary-foreground">
             <FlaskConical className="size-5" />
           </span>
           <div className="flex flex-col leading-tight">
-            <span className="font-semibold tracking-tight text-sidebar-foreground">
+            <span className="font-bold tracking-tight text-sidebar-foreground text-[15px]">
               UNIQUE
             </span>
-            <span className="text-[11px] text-sidebar-muted">
+            <span className="text-[10px] uppercase tracking-[0.16em] text-sidebar-muted">
               Services Portal
             </span>
           </div>
@@ -85,13 +85,13 @@ function NavContent({ user, signOutAction }: Props) {
       </div>
 
       {/* Nav */}
-      <nav className="flex-1 overflow-y-auto py-4 px-3">
+      <nav className="flex-1 overflow-y-auto py-5 px-3">
         {GROUPS.map((group) => {
           const items = NAV.filter((n) => n.group === group);
           if (items.length === 0) return null;
           return (
-            <div key={group} className="mb-5 last:mb-0">
-              <div className="px-3 mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-sidebar-muted">
+            <div key={group} className="mb-6 last:mb-0">
+              <div className="px-3 mb-2 text-[10px] font-semibold uppercase tracking-[0.16em] text-sidebar-muted">
                 {group}
               </div>
               <ul className="space-y-0.5">
@@ -103,16 +103,19 @@ function NavContent({ user, signOutAction }: Props) {
                       <Link
                         href={item.href}
                         className={cn(
-                          "flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-colors",
+                          "flex items-center gap-3 px-3 py-2 text-sm font-medium transition-colors relative",
                           active
                             ? "bg-sidebar-accent text-sidebar-accent-foreground"
                             : "text-sidebar-muted hover:bg-sidebar-accent/60 hover:text-sidebar-foreground"
                         )}
                       >
+                        {active && (
+                          <span className="absolute left-0 top-0 bottom-0 w-0.5 bg-sidebar-primary" />
+                        )}
                         <Icon
                           className={cn(
                             "size-4 shrink-0",
-                            active && "text-sidebar-primary"
+                            active ? "text-sidebar-primary" : ""
                           )}
                         />
                         <span>{item.label}</span>
@@ -129,7 +132,7 @@ function NavContent({ user, signOutAction }: Props) {
       {/* Footer */}
       <div className="border-t border-sidebar-border p-3">
         <div className="flex items-center gap-3 px-2 py-2">
-          <div className="inline-flex items-center justify-center size-9 rounded-full bg-sidebar-accent text-sidebar-accent-foreground font-medium text-xs shrink-0">
+          <div className="inline-flex items-center justify-center size-9 bg-sidebar-accent text-sidebar-accent-foreground font-medium text-xs shrink-0">
             {initials || "?"}
           </div>
           <div className="min-w-0 flex-1">
@@ -139,8 +142,8 @@ function NavContent({ user, signOutAction }: Props) {
             >
               {user.firmaAdi}
             </div>
-            <div className="text-[11px] text-sidebar-muted flex items-center gap-1.5">
-              <span className="font-mono">{user.kod}</span>
+            <div className="text-[10px] text-sidebar-muted flex items-center gap-1.5 uppercase tracking-wider">
+              <span>{user.kod}</span>
               <span>·</span>
               <span>{user.tur}</span>
             </div>
@@ -177,11 +180,11 @@ export function MobileTopBar({ onOpen }: { onOpen: () => void }) {
       >
         <Menu className="size-5" />
       </Button>
-      <Link href="/ozet" className="flex items-center gap-2 font-semibold">
-        <span className="inline-flex items-center justify-center size-7 rounded-md bg-primary text-primary-foreground">
+      <Link href="/ozet" className="flex items-center gap-2 font-bold">
+        <span className="inline-flex items-center justify-center size-7 bg-primary text-primary-foreground">
           <FlaskConical className="size-4" />
         </span>
-        <span>UNIQUE Portal</span>
+        <span>UNIQUE</span>
       </Link>
       <div className="ml-auto">
         <ThemeToggle />
@@ -197,7 +200,7 @@ export function SidebarShell({ user, signOutAction, children }: Props & { childr
 
   return (
     <div className="min-h-screen bg-background lg:grid lg:grid-cols-[256px_minmax(0,1fr)]">
-      {/* Desktop sidebar - fixed in grid column */}
+      {/* Desktop sidebar */}
       <aside className="hidden lg:block bg-sidebar text-sidebar-foreground border-r border-sidebar-border lg:sticky lg:top-0 lg:h-screen overflow-hidden">
         <NavContent user={user} signOutAction={signOutAction} />
       </aside>
