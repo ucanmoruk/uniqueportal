@@ -176,7 +176,7 @@ export function SmartTable<T extends object>({
                   <th
                     key={c.key}
                     className={cn(
-                      "px-4 py-2.5 font-medium text-xs uppercase tracking-wide whitespace-nowrap select-none",
+                      "px-4 py-2.5 font-mono font-medium text-[11px] uppercase tracking-wider whitespace-nowrap select-none",
                       c.align === "right" && "text-right",
                       c.align === "center" && "text-center",
                       sortable && "cursor-pointer hover:text-foreground transition-colors",
