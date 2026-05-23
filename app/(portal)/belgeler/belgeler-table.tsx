@@ -5,7 +5,13 @@ import { formatDate } from "@/lib/utils";
 import { Eye, FileText } from "lucide-react";
 import type { RaporListItem } from "@/lib/repositories/rapor";
 
-export function BelgelerTable({ rows }: { rows: RaporListItem[] }) {
+export function BelgelerTable({
+  rows,
+  showProje = false,
+}: {
+  rows: RaporListItem[];
+  showProje?: boolean;
+}) {
   const columns: SmartColumn<RaporListItem>[] = [
     {
       key: "no",
@@ -37,12 +43,16 @@ export function BelgelerTable({ rows }: { rows: RaporListItem[] }) {
       accessor: (r) => r["Müşteri"],
       cell: (r) => r["Müşteri"] ?? "—",
     },
-    {
-      key: "proje",
-      header: "Proje",
-      accessor: (r) => r.Proje,
-      cell: (r) => r.Proje ?? "—",
-    },
+    ...(showProje
+      ? ([
+          {
+            key: "proje",
+            header: "Proje",
+            accessor: (r) => r.Proje,
+            cell: (r) => r.Proje ?? "—",
+          },
+        ] satisfies SmartColumn<RaporListItem>[])
+      : []),
     {
       key: "tur",
       header: "Tür",

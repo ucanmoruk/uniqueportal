@@ -7,7 +7,13 @@ import { formatDate } from "@/lib/utils";
 import { ChevronRight } from "lucide-react";
 import type { TeklifListItem } from "@/lib/repositories/teklif";
 
-export function TekliflerTable({ rows }: { rows: TeklifListItem[] }) {
+export function TekliflerTable({
+  rows,
+  showProje = false,
+}: {
+  rows: TeklifListItem[];
+  showProje?: boolean;
+}) {
   const columns: SmartColumn<TeklifListItem>[] = [
     {
       key: "no",
@@ -29,12 +35,16 @@ export function TekliflerTable({ rows }: { rows: TeklifListItem[] }) {
       accessor: (r) => r["Müşteri"],
       cell: (r) => r["Müşteri"] ?? "—",
     },
-    {
-      key: "proje",
-      header: "Proje",
-      accessor: (r) => r.Proje,
-      cell: (r) => r.Proje ?? "—",
-    },
+    ...(showProje
+      ? ([
+          {
+            key: "proje",
+            header: "Proje",
+            accessor: (r) => r.Proje,
+            cell: (r) => r.Proje ?? "—",
+          },
+        ] satisfies SmartColumn<TeklifListItem>[])
+      : []),
     {
       key: "aciklama",
       header: "Açıklama",

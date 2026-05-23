@@ -5,7 +5,13 @@ import { StatusBadge } from "@/components/ui/badge";
 import { formatDate, formatTL } from "@/lib/utils";
 import type { FaturaListItem } from "@/lib/repositories/fatura";
 
-export function FaturalarTable({ rows }: { rows: FaturaListItem[] }) {
+export function FaturalarTable({
+  rows,
+  showProje = false,
+}: {
+  rows: FaturaListItem[];
+  showProje?: boolean;
+}) {
   const columns: SmartColumn<FaturaListItem>[] = [
     {
       key: "no",
@@ -27,12 +33,16 @@ export function FaturalarTable({ rows }: { rows: FaturaListItem[] }) {
       accessor: (r) => r["Müşteri"],
       cell: (r) => r["Müşteri"] ?? "—",
     },
-    {
-      key: "proje",
-      header: "Proje",
-      accessor: (r) => r.Proje,
-      cell: (r) => r.Proje ?? "—",
-    },
+    ...(showProje
+      ? ([
+          {
+            key: "proje",
+            header: "Proje",
+            accessor: (r) => r.Proje,
+            cell: (r) => r.Proje ?? "—",
+          },
+        ] satisfies SmartColumn<FaturaListItem>[])
+      : []),
     {
       key: "tutar",
       header: "Tutar",

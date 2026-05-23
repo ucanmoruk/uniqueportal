@@ -93,6 +93,7 @@ export default async function OzetPage() {
     loadStats(user),
     loadRecentTalepler(user),
   ]);
+  const showOlusturan = isAdmin(user);
 
   return (
     <>
@@ -161,9 +162,11 @@ export default async function OzetPage() {
                   <th className="px-4 py-2.5 font-medium text-xs uppercase tracking-wide">
                     Müşteri
                   </th>
-                  <th className="px-4 py-2.5 font-medium text-xs uppercase tracking-wide">
-                    Oluşturan
-                  </th>
+                  {showOlusturan && (
+                    <th className="px-4 py-2.5 font-medium text-xs uppercase tracking-wide">
+                      Oluşturan
+                    </th>
+                  )}
                   <th className="px-4 py-2.5 font-medium text-xs uppercase tracking-wide">
                     Durum
                   </th>
@@ -174,7 +177,7 @@ export default async function OzetPage() {
                 {recents.length === 0 ? (
                   <tr>
                     <td
-                      colSpan={6}
+                      colSpan={showOlusturan ? 6 : 5}
                       className="px-6 py-12 text-center text-muted-foreground"
                     >
                       Henüz talep bulunmuyor.
@@ -191,9 +194,11 @@ export default async function OzetPage() {
                         {formatDate(r.Tarih)}
                       </td>
                       <td className="px-4 py-3">{r["Müşteri"] ?? "—"}</td>
-                      <td className="px-4 py-3 text-muted-foreground">
-                        {r["Talep Oluşturan"] ?? "—"}
-                      </td>
+                      {showOlusturan && (
+                        <td className="px-4 py-3 text-muted-foreground">
+                          {r["Talep Oluşturan"] ?? "—"}
+                        </td>
+                      )}
                       <td className="px-4 py-3">
                         <StatusBadge value={r.Durum} />
                       </td>

@@ -1,5 +1,6 @@
 import { requireUser } from "@/lib/auth";
 import { listTermin } from "@/lib/repositories/termin";
+import { isAdmin } from "@/lib/permissions";
 import { PageHeader } from "@/components/page-header";
 import { TerminTable } from "./termin-table";
 
@@ -15,7 +16,7 @@ export default async function TerminPage() {
         title="Termin Takibi"
         description={`Son ${rows.length} kayıt — kırmızı: gecikmiş, sarı: 3 gün içinde.`}
       />
-      <TerminTable rows={rows} />
+      <TerminTable rows={rows} showProje={isAdmin(user)} />
     </>
   );
 }

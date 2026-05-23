@@ -1,5 +1,6 @@
 import { requireUser } from "@/lib/auth";
 import { listFaturalar, getFaturaOzet } from "@/lib/repositories/fatura";
+import { isAdmin } from "@/lib/permissions";
 import { Card, CardContent } from "@/components/ui/card";
 import { PageHeader } from "@/components/page-header";
 import { formatTL } from "@/lib/utils";
@@ -35,7 +36,7 @@ export default async function FaturalarPage() {
         />
       </div>
 
-      <FaturalarTable rows={rows} />
+      <FaturalarTable rows={rows} showProje={isAdmin(user)} />
     </>
   );
 }

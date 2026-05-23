@@ -1,5 +1,6 @@
 import { requireUser } from "@/lib/auth";
 import { listRaporlar } from "@/lib/repositories/rapor";
+import { isAdmin } from "@/lib/permissions";
 import { PageHeader } from "@/components/page-header";
 import { BelgelerTable } from "./belgeler-table";
 
@@ -15,7 +16,7 @@ export default async function BelgelerPage() {
         title="Belgelerim"
         description={`Toplam ${rows.length} aktif rapor. Görüntüle butonuna tıklayarak PDF'i yeni sekmede açabilirsiniz.`}
       />
-      <BelgelerTable rows={rows} />
+      <BelgelerTable rows={rows} showProje={isAdmin(user)} />
     </>
   );
 }

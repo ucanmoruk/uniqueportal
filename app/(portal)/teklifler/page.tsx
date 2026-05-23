@@ -1,5 +1,6 @@
 import { requireUser } from "@/lib/auth";
 import { listTeklifler } from "@/lib/repositories/teklif";
+import { isAdmin } from "@/lib/permissions";
 import { PageHeader } from "@/components/page-header";
 import { TekliflerTable } from "./teklifler-table";
 
@@ -12,7 +13,7 @@ export default async function TekliflerPage() {
   return (
     <>
       <PageHeader title="Teklifler" description={`Toplam ${rows.length} teklif.`} />
-      <TekliflerTable rows={rows} />
+      <TekliflerTable rows={rows} showProje={isAdmin(user)} />
     </>
   );
 }

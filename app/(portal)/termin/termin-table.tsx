@@ -5,7 +5,13 @@ import { StatusBadge } from "@/components/ui/badge";
 import { formatDate } from "@/lib/utils";
 import type { TerminListItem } from "@/lib/repositories/termin";
 
-export function TerminTable({ rows }: { rows: TerminListItem[] }) {
+export function TerminTable({
+  rows,
+  showProje = false,
+}: {
+  rows: TerminListItem[];
+  showProje?: boolean;
+}) {
   const now = Date.now();
 
   const columns: SmartColumn<TerminListItem>[] = [
@@ -27,12 +33,16 @@ export function TerminTable({ rows }: { rows: TerminListItem[] }) {
       accessor: (r) => r.Firma,
       cell: (r) => r.Firma ?? "—",
     },
-    {
-      key: "proje",
-      header: "Proje",
-      accessor: (r) => r.Proje,
-      cell: (r) => r.Proje ?? "—",
-    },
+    ...(showProje
+      ? ([
+          {
+            key: "proje",
+            header: "Proje",
+            accessor: (r) => r.Proje,
+            cell: (r) => r.Proje ?? "—",
+          },
+        ] satisfies SmartColumn<TerminListItem>[])
+      : []),
     {
       key: "numune",
       header: "Numune",
