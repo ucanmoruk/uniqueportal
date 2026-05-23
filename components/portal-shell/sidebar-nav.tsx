@@ -25,31 +25,37 @@ interface NavItem {
   href: string;
   label: string;
   icon: React.ComponentType<{ className?: string }>;
+  group?: string;
 }
 
 const NAV: NavItem[] = [
-  { href: "/ozet", label: "Özet", icon: LayoutDashboard },
-  { href: "/talepler", label: "Talepler", icon: FileText },
-  { href: "/teklifler", label: "Teklifler", icon: FileSpreadsheet },
-  { href: "/faturalar", label: "Faturalar", icon: Receipt },
-  { href: "/termin", label: "Termin Takibi", icon: Clock },
-  { href: "/belgeler", label: "Belgelerim", icon: FileCheck },
-  { href: "/destek", label: "Destek", icon: LifeBuoy },
-  { href: "/hesabim", label: "Hesabım", icon: User },
+  { href: "/ozet", label: "Özet", icon: LayoutDashboard, group: "Genel" },
+  { href: "/talepler", label: "Test Talepleri", icon: FileText, group: "İşlemler" },
+  { href: "/teklifler", label: "Teklifler", icon: FileSpreadsheet, group: "İşlemler" },
+  { href: "/faturalar", label: "Faturalar", icon: Receipt, group: "Finans" },
+  { href: "/termin", label: "Termin Takibi", icon: Clock, group: "İşlemler" },
+  { href: "/belgeler", label: "Belgelerim", icon: FileCheck, group: "İşlemler" },
+  { href: "/destek", label: "Destek Talepleri", icon: LifeBuoy, group: "Yardım" },
+  { href: "/hesabim", label: "Hesabım", icon: User, group: "Hesap" },
 ];
 
-export function SidebarNav({
-  user,
-  signOutAction,
-}: {
-  user: { firmaAdi: string; kod: string; tur: string };
-  signOutAction: () => void;
-}) {
-  const pathname = usePathname();
-  const [open, setOpen] = React.useState(false);
+const GROUPS = ["Genel", "İşlemler", "Finans", "Yardım", "Hesap"];
 
-  // mobile drawer kapansın navigation sonrası
-  React.useEffect(() => setOpen(false), [pathname]);
+interface UserInfo {
+  firmaAdi: string;
+  kod: string;
+  tur: string;
+}
+
+interface Props {
+  user: UserInfo;
+  signOutAction: () => void;
+}
+
+function NavContent({ user, signOutAction }: Props) {
+  const pathname = usePathname();
+  const isActive = (href: string) =>
+    pathname === href || pathname.startsWith(href + "/");
 
   const initials = (user.firmaAdi || user.kod)
     .split(/\s+/)
@@ -59,65 +65,81 @@ export function SidebarNav({
     .join("")
     .toUpperCase();
 
-  const isActive = (href: string) =>
-    pathname === href || pathname.startsWith(href + "/");
-
-  const navContent = (
-    <>
-      <div className="px-5 py-5 border-b">
-        <Link href="/ozet" className="flex items-center gap-2.5 group">
-          <span className="inline-flex items-center justify-center size-9 rounded-lg bg-primary text-primary-foreground shadow-sm">
+  return (
+    <div className="flex flex-col h-full">
+      {/* Brand */}
+      <div className="px-5 py-5 border-b border-sidebar-border">
+        <Link href="/ozet" className="flex items-center gap-2.5">
+          <span className="inline-flex items-center justify-center size-9 rounded-md bg-sidebar-primary text-sidebar-primary-foreground">
             <FlaskConical className="size-5" />
           </span>
           <div className="flex flex-col leading-tight">
-            <span className="font-semibold tracking-tight">UNIQUE</span>
-            <span className="text-[11px] text-muted-foreground">
+            <span className="font-semibold tracking-tight text-sidebar-foreground">
+              UNIQUE
+            </span>
+            <span className="text-[11px] text-sidebar-muted">
               Services Portal
             </span>
           </div>
         </Link>
       </div>
 
-      <nav className="flex-1 overflow-y-auto p-3 space-y-1">
-        {NAV.map((item) => {
-          const Icon = item.icon;
-          const active = isActive(item.href);
+      {/* Nav */}
+      <nav className="flex-1 overflow-y-auto py-4 px-3">
+        {GROUPS.map((group) => {
+          const items = NAV.filter((n) => n.group === group);
+          if (items.length === 0) return null;
           return (
-            <Link
-              key={item.href}
-              href={item.href}
-              className={cn(
-                "flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-colors",
-                active
-                  ? "bg-primary/10 text-primary"
-                  : "text-muted-foreground hover:bg-accent hover:text-foreground"
-              )}
-            >
-              <Icon
-                className={cn(
-                  "size-4 shrink-0",
-                  active ? "text-primary" : "text-muted-foreground"
-                )}
-              />
-              <span>{item.label}</span>
-              {active && (
-                <span className="ml-auto size-1.5 rounded-full bg-primary" />
-              )}
-            </Link>
+            <div key={group} className="mb-5 last:mb-0">
+              <div className="px-3 mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-sidebar-muted">
+                {group}
+              </div>
+              <ul className="space-y-0.5">
+                {items.map((item) => {
+                  const Icon = item.icon;
+                  const active = isActive(item.href);
+                  return (
+                    <li key={item.href}>
+                      <Link
+                        href={item.href}
+                        className={cn(
+                          "flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-colors",
+                          active
+                            ? "bg-sidebar-accent text-sidebar-accent-foreground"
+                            : "text-sidebar-muted hover:bg-sidebar-accent/60 hover:text-sidebar-foreground"
+                        )}
+                      >
+                        <Icon
+                          className={cn(
+                            "size-4 shrink-0",
+                            active && "text-sidebar-primary"
+                          )}
+                        />
+                        <span>{item.label}</span>
+                      </Link>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
           );
         })}
       </nav>
 
-      <div className="p-3 border-t">
-        <div className="flex items-center gap-3 px-2 py-2 rounded-md">
-          <div className="inline-flex items-center justify-center size-9 rounded-full bg-accent text-accent-foreground font-medium text-sm shrink-0">
+      {/* Footer */}
+      <div className="border-t border-sidebar-border p-3">
+        <div className="flex items-center gap-3 px-2 py-2">
+          <div className="inline-flex items-center justify-center size-9 rounded-full bg-sidebar-accent text-sidebar-accent-foreground font-medium text-xs shrink-0">
             {initials || "?"}
           </div>
           <div className="min-w-0 flex-1">
-            <div className="text-sm font-medium truncate" title={user.firmaAdi}>
+            <div
+              className="text-sm font-medium text-sidebar-foreground truncate"
+              title={user.firmaAdi}
+            >
               {user.firmaAdi}
             </div>
-            <div className="text-[11px] text-muted-foreground flex items-center gap-1.5">
+            <div className="text-[11px] text-sidebar-muted flex items-center gap-1.5">
               <span className="font-mono">{user.kod}</span>
               <span>·</span>
               <span>{user.tur}</span>
@@ -125,14 +147,14 @@ export function SidebarNav({
           </div>
         </div>
 
-        <div className="flex items-center gap-1 mt-2">
+        <div className="mt-2 flex items-center gap-1">
           <ThemeToggle />
           <form action={signOutAction} className="flex-1">
             <Button
               type="submit"
               variant="ghost"
               size="sm"
-              className="w-full justify-start text-muted-foreground hover:text-destructive"
+              className="w-full justify-start text-sidebar-muted hover:bg-sidebar-accent/60 hover:text-sidebar-foreground"
             >
               <LogOut className="size-4" />
               Çıkış Yap
@@ -140,59 +162,79 @@ export function SidebarNav({
           </form>
         </div>
       </div>
-    </>
+    </div>
   );
+}
+
+export function MobileTopBar({ onOpen }: { onOpen: () => void }) {
+  return (
+    <header className="lg:hidden sticky top-0 z-20 flex items-center gap-3 border-b bg-card/95 backdrop-blur px-4 h-14">
+      <Button
+        variant="ghost"
+        size="icon"
+        onClick={onOpen}
+        aria-label="Menüyü aç"
+      >
+        <Menu className="size-5" />
+      </Button>
+      <Link href="/ozet" className="flex items-center gap-2 font-semibold">
+        <span className="inline-flex items-center justify-center size-7 rounded-md bg-primary text-primary-foreground">
+          <FlaskConical className="size-4" />
+        </span>
+        <span>UNIQUE Portal</span>
+      </Link>
+      <div className="ml-auto">
+        <ThemeToggle />
+      </div>
+    </header>
+  );
+}
+
+export function SidebarShell({ user, signOutAction, children }: Props & { children: React.ReactNode }) {
+  const [open, setOpen] = React.useState(false);
+  const pathname = usePathname();
+  React.useEffect(() => setOpen(false), [pathname]);
 
   return (
-    <>
-      {/* Desktop sidebar */}
-      <aside className="hidden lg:flex w-64 shrink-0 flex-col border-r bg-sidebar text-sidebar-foreground sticky top-0 h-screen">
-        {navContent}
+    <div className="min-h-screen bg-background lg:grid lg:grid-cols-[256px_minmax(0,1fr)]">
+      {/* Desktop sidebar - fixed in grid column */}
+      <aside className="hidden lg:flex bg-sidebar text-sidebar-foreground border-r border-sidebar-border lg:sticky lg:top-0 lg:h-screen">
+        <div className="flex w-64 h-full">
+          <NavContent user={user} signOutAction={signOutAction} />
+        </div>
       </aside>
 
-      {/* Mobile top bar with hamburger */}
-      <div className="lg:hidden sticky top-0 z-30 flex items-center gap-3 border-b bg-card/95 backdrop-blur px-4 h-14">
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={() => setOpen(true)}
-          aria-label="Menüyü aç"
-        >
-          <Menu className="size-5" />
-        </Button>
-        <Link href="/ozet" className="flex items-center gap-2 font-semibold">
-          <span className="inline-flex items-center justify-center size-7 rounded-md bg-primary text-primary-foreground">
-            <FlaskConical className="size-4" />
-          </span>
-          <span>UNIQUE</span>
-        </Link>
-        <div className="ml-auto">
-          <ThemeToggle />
-        </div>
+      {/* Main column */}
+      <div className="flex flex-col min-w-0">
+        <MobileTopBar onOpen={() => setOpen(true)} />
+        <main className="flex-1 min-w-0">
+          <div className="max-w-7xl mx-auto p-4 sm:p-6 lg:p-8">{children}</div>
+        </main>
       </div>
 
       {/* Mobile drawer */}
       {open && (
-        <div className="lg:hidden fixed inset-0 z-50 flex">
-          <div
-            className="absolute inset-0 bg-black/50 backdrop-blur-sm"
+        <div className="lg:hidden fixed inset-0 z-50">
+          <button
+            type="button"
+            className="absolute inset-0 bg-foreground/40 backdrop-blur-sm"
             onClick={() => setOpen(false)}
-            aria-hidden
+            aria-label="Menüyü kapat"
           />
-          <aside className="relative flex w-72 max-w-[80vw] flex-col bg-sidebar text-sidebar-foreground border-r shadow-xl animate-in slide-in-from-left duration-200">
+          <aside className="absolute inset-y-0 left-0 w-72 max-w-[85vw] bg-sidebar text-sidebar-foreground border-r border-sidebar-border shadow-xl animate-in slide-in-from-left-4 duration-200">
             <Button
               variant="ghost"
               size="icon"
               onClick={() => setOpen(false)}
-              className="absolute top-3 right-3 z-10"
+              className="absolute top-3 right-3 z-10 text-sidebar-foreground hover:bg-sidebar-accent"
               aria-label="Menüyü kapat"
             >
               <X className="size-5" />
             </Button>
-            {navContent}
+            <NavContent user={user} signOutAction={signOutAction} />
           </aside>
         </div>
       )}
-    </>
+    </div>
   );
 }

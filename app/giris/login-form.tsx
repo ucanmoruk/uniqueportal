@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { loginAction, type LoginState } from "./actions";
-import { Loader2, LogIn } from "lucide-react";
+import { Loader2, LogIn, AlertCircle } from "lucide-react";
 
 const initialState: LoginState = {};
 
@@ -16,11 +16,11 @@ export function LoginForm() {
   const [state, formAction, pending] = useActionState(loginAction, initialState);
 
   return (
-    <form action={formAction} className="space-y-4">
+    <form action={formAction} className="space-y-5">
       <input type="hidden" name="next" value={next} />
 
       <div className="space-y-2">
-        <Label htmlFor="kod">Kullanıcı Kodu</Label>
+        <Label htmlFor="kod">Firma Kodu</Label>
         <Input
           id="kod"
           name="kod"
@@ -29,10 +29,8 @@ export function LoginForm() {
           placeholder="UQ12345"
           required
           autoFocus
+          className="h-10"
         />
-        <p className="text-[11px] text-muted-foreground">
-          Mevcut portaldaki firma kodunuz (UQ + 5 rakam) ve parolanızla giriş yapın.
-        </p>
       </div>
 
       <div className="space-y-2">
@@ -43,16 +41,18 @@ export function LoginForm() {
           type="password"
           autoComplete="current-password"
           required
+          className="h-10"
         />
       </div>
 
       {state.error && (
-        <div className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
-          {state.error}
+        <div className="flex items-start gap-2 rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2.5 text-sm text-destructive">
+          <AlertCircle className="size-4 shrink-0 mt-0.5" />
+          <span>{state.error}</span>
         </div>
       )}
 
-      <Button type="submit" size="lg" className="w-full" disabled={pending}>
+      <Button type="submit" size="lg" className="w-full h-11" disabled={pending}>
         {pending ? (
           <>
             <Loader2 className="animate-spin" />

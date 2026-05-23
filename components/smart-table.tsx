@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -18,43 +19,24 @@ import {
 } from "lucide-react";
 
 export interface SmartColumn<T> {
-  /** Sıralama / arama / sayfalama için stabil anahtar */
   key: string;
-  /** Başlık metni */
   header: string;
-  /** Arama/sıralama için ham değer — string/number döner */
   accessor?: (row: T) => string | number | null | undefined | Date;
-  /** Hücre render */
   cell?: (row: T) => React.ReactNode;
-  /** Hizalama */
   align?: "left" | "right" | "center";
-  /** Sıralama açık mı? Varsayılan true */
   sortable?: boolean;
-  /** Aramada bu kolon kullanılsın mı? Varsayılan true */
   searchable?: boolean;
-  /** Genişlik sınıfı */
   className?: string;
-  /** Türü (filter yok, tip ipucu için) */
-  type?: "text" | "number" | "date";
 }
 
 interface SmartTableProps<T> {
   rows: T[];
   columns: SmartColumn<T>[];
   rowKey: (row: T, idx: number) => string | number;
-  /** Arama placeholder */
   searchPlaceholder?: string;
-  /** Başlangıçta sayfa boyutu */
   pageSize?: number;
-  /** Bütün satırlar gizleninceye dair mesaj */
   emptyMessage?: string;
-  /** Toolbar'da gösterilecek ek butonlar */
   toolbar?: React.ReactNode;
-  /** Tablo başlığı (toolbar üstünde) */
-  title?: string;
-  /** Açıklama (örn: "Toplam X kayıt") */
-  description?: string;
-  /** Satır id'sine göre detay linki üretirse, satır tıklaması bunu açar */
   rowHref?: (row: T) => string | undefined;
 }
 
@@ -77,10 +59,9 @@ export function SmartTable<T extends object>({
   pageSize: initialPageSize = 25,
   emptyMessage = "Kayıt bulunamadı.",
   toolbar,
-  title,
-  description,
   rowHref,
 }: SmartTableProps<T>) {
+  const router = useRouter();
   const [search, setSearch] = React.useState("");
   const [sortKey, setSortKey] = React.useState<string | null>(null);
   const [sortDir, setSortDir] = React.useState<SortDir>("asc");
@@ -91,7 +72,6 @@ export function SmartTable<T extends object>({
     setPage(1);
   }, [search, pageSize]);
 
-  // Filter
   const filtered = React.useMemo(() => {
     if (!search.trim()) return rows;
     const term = search.trim().toLocaleLowerCase("tr-TR");
@@ -105,7 +85,6 @@ export function SmartTable<T extends object>({
     );
   }, [rows, search, columns]);
 
-  // Sort
   const sorted = React.useMemo(() => {
     if (!sortKey) return filtered;
     const col = columns.find((c) => c.key === sortKey);
@@ -121,7 +100,6 @@ export function SmartTable<T extends object>({
     return arr;
   }, [filtered, sortKey, sortDir, columns]);
 
-  // Paginate
   const total = sorted.length;
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
   const safePage = Math.min(page, totalPages);
@@ -139,29 +117,16 @@ export function SmartTable<T extends object>({
   }
 
   return (
-    <div className="space-y-3">
-      {(title || description || toolbar) && (
-        <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3">
-          {(title || description) && (
-            <div>
-              {title && <h2 className="text-lg font-semibold">{title}</h2>}
-              {description && (
-                <p className="text-sm text-muted-foreground">{description}</p>
-              )}
-            </div>
-          )}
-          {toolbar && <div className="flex items-center gap-2">{toolbar}</div>}
-        </div>
-      )}
-
-      <div className="flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-between">
+    <div className="rounded-lg border bg-card text-card-foreground overflow-hidden shadow-sm">
+      {/* Toolbar */}
+      <div className="flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-between px-4 py-3 border-b bg-muted/30">
         <div className="relative w-full sm:max-w-sm">
           <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 size-4 text-muted-foreground pointer-events-none" />
           <Input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder={searchPlaceholder}
-            className="pl-8 pr-8"
+            className="pl-8 pr-8 bg-background"
           />
           {search && (
             <button
@@ -175,21 +140,23 @@ export function SmartTable<T extends object>({
           )}
         </div>
 
-        <div className="flex items-center gap-2 text-sm text-muted-foreground">
-          <span className="whitespace-nowrap">
+        <div className="flex items-center gap-3 text-sm">
+          {toolbar}
+          <span className="hidden sm:inline text-muted-foreground tabular-nums whitespace-nowrap">
             {total === 0
-              ? "Sonuç yok"
+              ? "0 sonuç"
               : `${start + 1}–${Math.min(start + pageSize, total)} / ${total}`}
           </span>
-          <div className="w-24">
+          <div className="w-28">
             <Select
               value={String(pageSize)}
               onChange={(e) => setPageSize(Number(e.target.value))}
               aria-label="Sayfa boyutu"
+              className="bg-background"
             >
               {PAGE_SIZES.map((s) => (
                 <option key={s} value={s}>
-                  {s} / sf
+                  {s} satır
                 </option>
               ))}
             </Select>
@@ -197,133 +164,136 @@ export function SmartTable<T extends object>({
         </div>
       </div>
 
-      <div className="rounded-xl border bg-card overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead className="bg-muted/40 text-muted-foreground">
-              <tr className="text-left">
-                {columns.map((c) => {
-                  const sortable = c.sortable !== false && !!c.accessor;
-                  const isSorted = sortKey === c.key;
-                  return (
-                    <th
-                      key={c.key}
-                      className={cn(
-                        "px-4 py-2.5 font-medium whitespace-nowrap select-none",
-                        c.align === "right" && "text-right",
-                        c.align === "center" && "text-center",
-                        sortable && "cursor-pointer hover:text-foreground",
-                        c.className
-                      )}
-                      onClick={() => sortable && toggleSort(c)}
-                    >
-                      <span
-                        className={cn(
-                          "inline-flex items-center gap-1.5",
-                          c.align === "right" && "justify-end"
-                        )}
-                      >
-                        {c.header}
-                        {sortable &&
-                          (isSorted ? (
-                            sortDir === "asc" ? (
-                              <ChevronUp className="size-3.5" />
-                            ) : (
-                              <ChevronDown className="size-3.5" />
-                            )
-                          ) : (
-                            <ArrowUpDown className="size-3 opacity-40" />
-                          ))}
-                      </span>
-                    </th>
-                  );
-                })}
-              </tr>
-            </thead>
-            <tbody>
-              {pageRows.length === 0 ? (
-                <tr>
-                  <td
-                    colSpan={columns.length}
-                    className="px-4 py-16 text-center text-muted-foreground"
-                  >
-                    {search ? (
-                      <>
-                        <span className="block">
-                          &quot;<span className="font-medium">{search}</span>&quot;
-                          için sonuç bulunamadı.
-                        </span>
-                        <Button
-                          variant="link"
-                          size="sm"
-                          onClick={() => setSearch("")}
-                        >
-                          Aramayı temizle
-                        </Button>
-                      </>
-                    ) : (
-                      emptyMessage
+      {/* Table */}
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead className="bg-muted/20 text-muted-foreground border-b">
+            <tr className="text-left">
+              {columns.map((c) => {
+                const sortable = c.sortable !== false && !!c.accessor;
+                const isSorted = sortKey === c.key;
+                return (
+                  <th
+                    key={c.key}
+                    className={cn(
+                      "px-4 py-2.5 font-medium text-xs uppercase tracking-wide whitespace-nowrap select-none",
+                      c.align === "right" && "text-right",
+                      c.align === "center" && "text-center",
+                      sortable && "cursor-pointer hover:text-foreground transition-colors",
+                      c.className
                     )}
-                  </td>
-                </tr>
-              ) : (
-                pageRows.map((row, idx) => {
-                  const href = rowHref?.(row);
-                  return (
-                    <tr
-                      key={rowKey(row, start + idx)}
+                    onClick={() => sortable && toggleSort(c)}
+                  >
+                    <span
                       className={cn(
-                        "border-t",
-                        href
-                          ? "hover:bg-accent/40 cursor-pointer"
-                          : "hover:bg-accent/30"
+                        "inline-flex items-center gap-1.5",
+                        c.align === "right" && "justify-end",
+                        c.align === "center" && "justify-center"
                       )}
-                      onClick={
-                        href
-                          ? (e) => {
-                              // İç tıklamalı linkler / butonlar varsa yönlendirme yapma
-                              const target = e.target as HTMLElement;
-                              if (target.closest("a,button")) return;
-                              if (typeof window !== "undefined") {
-                                window.location.href = href;
-                              }
-                            }
-                          : undefined
-                      }
                     >
-                      {columns.map((c) => {
-                        const val = c.cell
-                          ? c.cell(row)
-                          : ((row as unknown as Record<string, React.ReactNode>)[
-                              c.key
-                            ] ?? null);
-                        return (
-                          <td
-                            key={c.key}
-                            className={cn(
-                              "px-4 py-2.5",
-                              c.align === "right" && "text-right",
-                              c.align === "center" && "text-center",
-                              c.className
-                            )}
-                          >
-                            {val}
-                          </td>
-                        );
-                      })}
-                    </tr>
-                  );
-                })
-              )}
-            </tbody>
-          </table>
-        </div>
+                      {c.header}
+                      {sortable &&
+                        (isSorted ? (
+                          sortDir === "asc" ? (
+                            <ChevronUp className="size-3.5 text-foreground" />
+                          ) : (
+                            <ChevronDown className="size-3.5 text-foreground" />
+                          )
+                        ) : (
+                          <ArrowUpDown className="size-3 opacity-30" />
+                        ))}
+                    </span>
+                  </th>
+                );
+              })}
+            </tr>
+          </thead>
+          <tbody>
+            {pageRows.length === 0 ? (
+              <tr>
+                <td
+                  colSpan={columns.length}
+                  className="px-4 py-16 text-center text-muted-foreground"
+                >
+                  {search ? (
+                    <div className="flex flex-col items-center gap-2">
+                      <span>
+                        &quot;<span className="font-medium text-foreground">
+                          {search}
+                        </span>&quot; için sonuç bulunamadı.
+                      </span>
+                      <Button
+                        variant="link"
+                        size="sm"
+                        onClick={() => setSearch("")}
+                      >
+                        Aramayı temizle
+                      </Button>
+                    </div>
+                  ) : (
+                    emptyMessage
+                  )}
+                </td>
+              </tr>
+            ) : (
+              pageRows.map((row, idx) => {
+                const href = rowHref?.(row);
+                return (
+                  <tr
+                    key={rowKey(row, start + idx)}
+                    className={cn(
+                      "border-b last:border-b-0 transition-colors",
+                      href
+                        ? "hover:bg-accent/40 cursor-pointer"
+                        : "hover:bg-accent/20"
+                    )}
+                    onClick={
+                      href
+                        ? (e) => {
+                            const target = e.target as HTMLElement;
+                            if (
+                              target.closest("a,button,input,select,textarea")
+                            )
+                              return;
+                            router.push(href);
+                          }
+                        : undefined
+                    }
+                  >
+                    {columns.map((c) => {
+                      const val = c.cell
+                        ? c.cell(row)
+                        : ((row as unknown as Record<string, React.ReactNode>)[
+                            c.key
+                          ] ?? null);
+                      return (
+                        <td
+                          key={c.key}
+                          className={cn(
+                            "px-4 py-3",
+                            c.align === "right" && "text-right",
+                            c.align === "center" && "text-center",
+                            c.className
+                          )}
+                        >
+                          {val}
+                        </td>
+                      );
+                    })}
+                  </tr>
+                );
+              })
+            )}
+          </tbody>
+        </table>
       </div>
 
+      {/* Pagination */}
       {totalPages > 1 && (
-        <div className="flex items-center justify-between gap-2 text-sm">
+        <div className="flex items-center justify-between gap-2 px-4 py-3 border-t bg-muted/30 text-sm">
           <div className="text-muted-foreground">
-            Sayfa {safePage} / {totalPages}
+            Sayfa <span className="font-medium text-foreground">{safePage}</span>{" "}
+            / {totalPages}
           </div>
           <div className="flex items-center gap-1">
             <Button
@@ -332,6 +302,7 @@ export function SmartTable<T extends object>({
               onClick={() => setPage(1)}
               disabled={safePage === 1}
               aria-label="İlk sayfa"
+              className="bg-background"
             >
               <ChevronsLeft className="size-4" />
             </Button>
@@ -341,6 +312,7 @@ export function SmartTable<T extends object>({
               onClick={() => setPage((p) => Math.max(1, p - 1))}
               disabled={safePage === 1}
               aria-label="Önceki"
+              className="bg-background"
             >
               <ChevronLeft className="size-4" />
             </Button>
@@ -350,6 +322,7 @@ export function SmartTable<T extends object>({
               onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
               disabled={safePage === totalPages}
               aria-label="Sonraki"
+              className="bg-background"
             >
               <ChevronRight className="size-4" />
             </Button>
@@ -359,6 +332,7 @@ export function SmartTable<T extends object>({
               onClick={() => setPage(totalPages)}
               disabled={safePage === totalPages}
               aria-label="Son sayfa"
+              className="bg-background"
             >
               <ChevronsRight className="size-4" />
             </Button>
