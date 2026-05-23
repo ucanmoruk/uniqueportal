@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { requireUser } from "@/lib/auth";
 import { listTalepler } from "@/lib/repositories/talep";
+import { isAdmin } from "@/lib/permissions";
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
 import { Plus } from "lucide-react";
@@ -25,7 +26,7 @@ export default async function TaleplerPage() {
           </Button>
         }
       />
-      <TaleplerTable rows={rows} />
+      <TaleplerTable rows={rows} showOlusturan={isAdmin(user)} />
     </>
   );
 }

@@ -7,7 +7,13 @@ import { formatDate } from "@/lib/utils";
 import { ChevronRight } from "lucide-react";
 import type { TalepListeItem } from "@/lib/repositories/talep";
 
-export function TaleplerTable({ rows }: { rows: TalepListeItem[] }) {
+export function TaleplerTable({
+  rows,
+  showOlusturan = false,
+}: {
+  rows: TalepListeItem[];
+  showOlusturan?: boolean;
+}) {
   const columns: SmartColumn<TalepListeItem>[] = [
     {
       key: "no",
@@ -29,16 +35,20 @@ export function TaleplerTable({ rows }: { rows: TalepListeItem[] }) {
       accessor: (r) => r["Müşteri"],
       cell: (r) => r["Müşteri"] ?? "—",
     },
-    {
-      key: "olusturan",
-      header: "Oluşturan",
-      accessor: (r) => r["Talep Oluşturan"],
-      cell: (r) => (
-        <span className="text-muted-foreground">
-          {r["Talep Oluşturan"] ?? "—"}
-        </span>
-      ),
-    },
+    ...(showOlusturan
+      ? ([
+          {
+            key: "olusturan",
+            header: "Oluşturan",
+            accessor: (r) => r["Talep Oluşturan"],
+            cell: (r) => (
+              <span className="text-muted-foreground">
+                {r["Talep Oluşturan"] ?? "—"}
+              </span>
+            ),
+          },
+        ] satisfies SmartColumn<TalepListeItem>[])
+      : []),
     {
       key: "durum",
       header: "Durum",
