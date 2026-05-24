@@ -56,8 +56,15 @@
   --uq-color-border-subtle: var(--uq-color-neutral-300);
   --uq-color-border-strong: var(--uq-color-neutral-500);
 
-  /* Sidebar — DARK kalır (tasarım kararı, koyu sol panel) */
-  /* dist/tokens.css'deki default değerler graphite-plum koyu paletinde */
+  /* Sidebar — light variant (override on dark default) */
+  --uq-sidebar-bg: var(--uq-color-neutral-0);                       /* #ffffff */
+  --uq-sidebar-border: var(--uq-color-neutral-300);                 /* #edebe9 */
+  --uq-sidebar-item-text: var(--uq-color-graphite-plum-400);        /* #585866 */
+  --uq-sidebar-item-text-hover: var(--uq-color-graphite-plum-200);  /* #161519 */
+  --uq-sidebar-item-bg-active: var(--uq-color-signal-blue-25);      /* #e8ecff */
+  --uq-sidebar-item-text-active: var(--uq-color-brand-primary);     /* #463aed */
+  --uq-sidebar-icon-default: var(--uq-color-graphite-plum-500);     /* #848499 */
+  --uq-sidebar-icon-active: var(--uq-color-brand-primary);          /* #463aed */
 
   /* Topbar — açık */
   --uq-topbar-bg: var(--uq-color-neutral-0);
@@ -149,12 +156,12 @@
   --ring: var(--uq-color-brand-primary);
 
   --sidebar: var(--uq-sidebar-bg);
-  --sidebar-foreground: var(--uq-color-graphite-plum-700);
+  --sidebar-foreground: var(--uq-color-graphite-plum-200);
   --sidebar-muted: var(--uq-sidebar-item-text);
-  --sidebar-primary: var(--uq-sidebar-item-bg-active);
-  --sidebar-primary-foreground: var(--uq-sidebar-item-text-active);
-  --sidebar-accent: var(--uq-color-graphite-plum-300);
-  --sidebar-accent-foreground: var(--uq-color-neutral-0);
+  --sidebar-primary: var(--uq-color-brand-primary);
+  --sidebar-primary-foreground: var(--uq-color-neutral-0);
+  --sidebar-accent: var(--uq-sidebar-item-bg-active);
+  --sidebar-accent-foreground: var(--uq-sidebar-item-text-active);
   --sidebar-border: var(--uq-sidebar-border);
   --sidebar-ring: var(--uq-color-brand-primary);
 }
