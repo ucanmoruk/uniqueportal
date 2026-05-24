@@ -1,6 +1,22 @@
 import { query, queryOne } from "@/lib/db";
 import type { Firma } from "@/types/db";
 
+export interface FirmaOption {
+  ID: number;
+  Kod: string;
+  Firma_Adi: string;
+  Tur: string;
+}
+
+export async function listFirmaOptions(): Promise<FirmaOption[]> {
+  return query<FirmaOption>(
+    `SELECT ID, Kod, Firma_Adi, Tur
+     FROM Firma
+     WHERE Durum = 'Aktif' AND Firma_Adi IS NOT NULL AND LEN(Firma_Adi) > 0
+     ORDER BY Firma_Adi ASC`
+  );
+}
+
 export async function findFirmaByKod(kod: string): Promise<Firma | null> {
   return queryOne<Firma>(
     `SELECT TOP 1 ID, Kod, Parola, Firma_Adi, Tur, Yetkili, Plasiyer, PlasiyerID,

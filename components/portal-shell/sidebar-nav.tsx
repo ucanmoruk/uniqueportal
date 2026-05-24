@@ -10,6 +10,7 @@ import {
   Receipt,
   Clock,
   FileCheck,
+  Upload,
   LifeBuoy,
   User,
   FlaskConical,
@@ -26,6 +27,7 @@ interface NavItem {
   label: string;
   icon: React.ComponentType<{ className?: string }>;
   group?: string;
+  adminOnly?: boolean;
 }
 
 const NAV: NavItem[] = [
@@ -35,16 +37,22 @@ const NAV: NavItem[] = [
   { href: "/faturalar", label: "Faturalar", icon: Receipt, group: "Finans" },
   { href: "/termin", label: "Termin Takibi", icon: Clock, group: "İşlemler" },
   { href: "/belgeler", label: "Belgelerim", icon: FileCheck, group: "İşlemler" },
+  { href: "/belgeler/yukle", label: "Belge Yükle", icon: Upload, group: "Yönetim", adminOnly: true },
   { href: "/destek", label: "Destek Talepleri", icon: LifeBuoy, group: "Yardım" },
   { href: "/hesabim", label: "Hesabım", icon: User, group: "Hesap" },
 ];
 
-const GROUPS = ["Genel", "İşlemler", "Finans", "Yardım", "Hesap"];
+const GROUPS = ["Genel", "İşlemler", "Finans", "Yönetim", "Yardım", "Hesap"];
 
 interface UserInfo {
   firmaAdi: string;
   kod: string;
   tur: string;
+}
+
+function navItemsForUser(tur: string): NavItem[] {
+  const isAdmin = tur === "Admin";
+  return NAV.filter((n) => !n.adminOnly || isAdmin);
 }
 
 interface Props {
@@ -87,7 +95,9 @@ function NavContent({ user, signOutAction }: Props) {
       {/* Nav */}
       <nav className="flex-1 overflow-y-auto py-5 px-3">
         {GROUPS.map((group) => {
-          const items = NAV.filter((n) => n.group === group);
+          const items = navItemsForUser(user.tur).filter(
+            (n) => n.group === group
+          );
           if (items.length === 0) return null;
           return (
             <div key={group} className="mb-6 last:mb-0">

@@ -55,3 +55,11 @@ export async function requireUser() {
     plasiyerId: session.user.plasiyerId,
   };
 }
+
+export async function requireAdmin() {
+  const user = await requireUser();
+  if (user.tur !== "Admin") {
+    throw new Error("Bu işlem için yönetici yetkisi gerekli.");
+  }
+  return user;
+}
