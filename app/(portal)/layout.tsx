@@ -2,6 +2,10 @@ import { ReactNode } from "react";
 import { redirect } from "next/navigation";
 import { signOut, requireUser } from "@/lib/auth";
 import { SidebarShell } from "@/components/portal-shell/sidebar-nav";
+import {
+  getBildirimler,
+  getSonGoruldu,
+} from "@/lib/repositories/bildirim";
 
 async function handleSignOut() {
   "use server";
@@ -16,6 +20,12 @@ export default async function PortalLayout({
 }) {
   const user = await requireUser();
 
+  // Bildirimler — paralel çek, hata olursa boş dön
+  const [bildirimler, sonGoruldu] = await Promise.all([
+    getBildirimler(user, 30).catch(() => []),
+    getSonGoruldu(user.id).catch(() => null),
+  ]);
+
   return (
     <SidebarShell
       user={{
@@ -24,6 +34,11 @@ export default async function PortalLayout({
         tur: user.tur,
       }}
       signOutAction={handleSignOut}
+      bildirimler={bildirimler.map((b) => ({
+        ...b,
+        tarih: b.tarih.toISOString(),
+      }))}
+      lastSeen={sonGoruldu ? sonGoruldu.toISOString() : null}
     >
       {children}
     </SidebarShell>

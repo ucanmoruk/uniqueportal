@@ -21,6 +21,8 @@ import {
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { BildirimBell } from "@/components/portal-shell/bildirim-bell";
+import type { Bildirim } from "@/lib/repositories/bildirim";
 
 interface NavItem {
   href: string;
@@ -55,12 +57,16 @@ function navItemsForUser(tur: string): NavItem[] {
   return NAV.filter((n) => !n.adminOnly || isAdmin);
 }
 
+type BildirimSerialized = Omit<Bildirim, "tarih"> & { tarih: string };
+
 interface Props {
   user: UserInfo;
   signOutAction: () => void;
+  bildirimler: BildirimSerialized[];
+  lastSeen: string | null;
 }
 
-function NavContent({ user, signOutAction }: Props) {
+function NavContent({ user, signOutAction, bildirimler, lastSeen }: Props) {
   const pathname = usePathname();
   const isActive = (href: string) =>
     pathname === href || pathname.startsWith(href + "/");
@@ -161,6 +167,11 @@ function NavContent({ user, signOutAction }: Props) {
         </div>
 
         <div className="mt-2 flex items-center gap-1">
+          <BildirimBell
+            bildirimler={bildirimler}
+            lastSeen={lastSeen}
+            variant="sidebar"
+          />
           <ThemeToggle />
           <form action={signOutAction} className="flex-1">
             <Button
@@ -179,7 +190,15 @@ function NavContent({ user, signOutAction }: Props) {
   );
 }
 
-export function MobileTopBar({ onOpen }: { onOpen: () => void }) {
+export function MobileTopBar({
+  onOpen,
+  bildirimler,
+  lastSeen,
+}: {
+  onOpen: () => void;
+  bildirimler: BildirimSerialized[];
+  lastSeen: string | null;
+}) {
   return (
     <header className="lg:hidden sticky top-0 z-20 flex items-center gap-3 border-b bg-card/95 backdrop-blur px-4 h-14">
       <Button
@@ -196,14 +215,25 @@ export function MobileTopBar({ onOpen }: { onOpen: () => void }) {
         </span>
         <span>UNIQUE</span>
       </Link>
-      <div className="ml-auto">
+      <div className="ml-auto flex items-center gap-1">
+        <BildirimBell
+          bildirimler={bildirimler}
+          lastSeen={lastSeen}
+          variant="topbar"
+        />
         <ThemeToggle />
       </div>
     </header>
   );
 }
 
-export function SidebarShell({ user, signOutAction, children }: Props & { children: React.ReactNode }) {
+export function SidebarShell({
+  user,
+  signOutAction,
+  bildirimler,
+  lastSeen,
+  children,
+}: Props & { children: React.ReactNode }) {
   const [open, setOpen] = React.useState(false);
   const pathname = usePathname();
   React.useEffect(() => setOpen(false), [pathname]);
@@ -212,12 +242,21 @@ export function SidebarShell({ user, signOutAction, children }: Props & { childr
     <div className="min-h-screen bg-background lg:grid lg:grid-cols-[256px_minmax(0,1fr)]">
       {/* Desktop sidebar */}
       <aside className="hidden lg:block bg-sidebar text-sidebar-foreground border-r border-sidebar-border lg:sticky lg:top-0 lg:h-screen overflow-hidden">
-        <NavContent user={user} signOutAction={signOutAction} />
+        <NavContent
+          user={user}
+          signOutAction={signOutAction}
+          bildirimler={bildirimler}
+          lastSeen={lastSeen}
+        />
       </aside>
 
       {/* Main column */}
       <div className="flex flex-col min-w-0">
-        <MobileTopBar onOpen={() => setOpen(true)} />
+        <MobileTopBar
+          onOpen={() => setOpen(true)}
+          bildirimler={bildirimler}
+          lastSeen={lastSeen}
+        />
         <main className="flex-1 min-w-0">
           <div className="max-w-7xl mx-auto p-4 sm:p-6 lg:p-8">{children}</div>
         </main>
@@ -242,7 +281,12 @@ export function SidebarShell({ user, signOutAction, children }: Props & { childr
             >
               <X className="size-5" />
             </Button>
-            <NavContent user={user} signOutAction={signOutAction} />
+            <NavContent
+              user={user}
+              signOutAction={signOutAction}
+              bildirimler={bildirimler}
+              lastSeen={lastSeen}
+            />
           </aside>
         </div>
       )}
