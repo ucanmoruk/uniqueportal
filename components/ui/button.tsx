@@ -3,33 +3,35 @@ import { Slot } from "@radix-ui/react-slot";
 import { cva, type VariantProps } from "class-variance-authority";
 import { cn } from "@/lib/utils";
 
-const buttonVariants = cva(
-  "inline-flex items-center justify-center gap-2 whitespace-nowrap font-semibold uppercase tracking-wider transition-all outline-none disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg:not([class*='size-'])]:size-4 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",
-  {
-    variants: {
-      variant: {
-        default:
-          "bg-primary text-primary-foreground hover:bg-[color:var(--primary-hover)]",
-        destructive:
-          "bg-destructive text-destructive-foreground hover:opacity-90",
-        outline:
-          "border border-foreground/80 text-foreground bg-transparent hover:bg-foreground hover:text-background",
-        secondary:
-          "border border-border bg-surface-secondary text-foreground hover:bg-surface-tertiary",
-        ghost:
-          "text-foreground hover:bg-accent hover:text-accent-foreground",
-        link: "text-primary underline-offset-4 hover:underline",
-      },
-      size: {
-        default: "h-10 px-5 py-2 text-[12px]",
-        sm: "h-8 px-3 text-[11px]",
-        lg: "h-12 px-6 text-[13px]",
-        icon: "size-9",
-      },
+/**
+ * UNIQUE Button — BEM kökenli, Tailwind ile birleşik.
+ *
+ * Block:    .uq-button
+ * Modifier: --primary | --secondary | --ghost | --destructive | --link
+ * Size:     --size-sm | --size-lg | --size-icon  (default = md, gizli)
+ *
+ * Disabled state CSS pseudo ile değil, opacity-50 + pointer-events-none
+ * ile uygulanır — BEM sınıfının dışında utility'ler eşlik eder.
+ */
+const buttonVariants = cva("uq-button", {
+  variants: {
+    variant: {
+      default: "uq-button--primary",
+      destructive: "uq-button--destructive",
+      outline: "uq-button--secondary",
+      secondary: "uq-button--secondary",
+      ghost: "uq-button--ghost",
+      link: "uq-button--link underline-offset-4 hover:underline text-primary",
     },
-    defaultVariants: { variant: "default", size: "default" },
-  }
-);
+    size: {
+      default: "",
+      sm: "uq-button--size-sm",
+      lg: "uq-button--size-lg",
+      icon: "uq-button--size-icon",
+    },
+  },
+  defaultVariants: { variant: "default", size: "default" },
+});
 
 export interface ButtonProps
   extends React.ButtonHTMLAttributes<HTMLButtonElement>,
@@ -43,7 +45,7 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
     return (
       <Comp
         ref={ref}
-        className={cn(buttonVariants({ variant, size, className }))}
+        className={cn(buttonVariants({ variant, size }), className)}
         {...props}
       />
     );

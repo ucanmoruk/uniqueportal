@@ -1,113 +1,168 @@
 @import "tailwindcss";
 @import "tw-animate-css";
+@import "./_tokens.css";
 
 @custom-variant dark (&:is(.dark *));
 
 /* ------------------------------------------------------------------ *
- * UNIQUE Alphabet design system
- * Renkler ve tipografi unique-alphabet.webflow.io'dan uyarlandı.
- * Signal blue brand, graphite plum text, JetBrains Mono.
+ * UNIQUE Design Tokens — entegrasyon
+ *
+ * Single source of truth: github.com/halobrand/unique-design-tokens
+ * `_tokens.css` bu repo'daki dist/web/tokens.css'in kopyasıdır.
+ *
+ * 3 katman:
+ *   primitive  →  semantic  →  component
+ *
+ * UI kodu yalnız `semantic` veya `component` token'larına başvurmalı.
+ *   ✓  var(--uq-color-brand-primary)
+ *   ✗  var(--uq-color-signal-blue-300)
  * ------------------------------------------------------------------ */
 
+/* ---- Font fallback override ------------------------------------
+ * TT Interphases Pro lisansı temin edilene dek geometrik fallback
+ * olarak Inter kullanıyoruz. Layout.tsx --font-sans-fallback (Inter)
+ * ve --font-mono-fallback (JetBrains Mono) değişkenlerini set eder.
+ */
 :root {
-  --radius: 0px;            /* webflow'da köşe yok */
-  --radius-card: 0px;
-  --radius-pill: 999px;
-
-  /* Yüzeyler */
-  --background: #ffffff;
-  --foreground: #161519;
-  --card: #ffffff;
-  --card-foreground: #161519;
-  --popover: #ffffff;
-  --popover-foreground: #161519;
-  --surface-secondary: #fafafa;
-  --surface-tertiary: #f4f4f6;
-
-  /* Brand (signal blue 300) */
-  --primary: #463aed;
-  --primary-foreground: #ffffff;
-  --primary-hover: #1a2bc4;
-  --primary-subtle: #e6e9ff;
-
-  /* Secondary / muted */
-  --secondary: #f4f4f6;
-  --secondary-foreground: #161519;
-  --muted: #f4f4f6;
-  --muted-foreground: #585866;     /* graphite plum 400 */
-  --accent: #e6e9ff;
-  --accent-foreground: #1a2bc4;
-
-  /* Durum renkleri */
-  --destructive: #c1392b;
-  --destructive-foreground: #ffffff;
-  --success: #387f3c;
-  --warning: #b07a16;
-
-  /* Çizgi/giriş */
-  --border: #e5e5ea;
-  --input: #e5e5ea;
-  --ring: #463aed;
-
-  /* Sidebar — graphite plum 200 */
-  --sidebar: #161519;
-  --sidebar-foreground: #f4f4f6;
-  --sidebar-muted: #8e8c9b;
-  --sidebar-primary: #4b6bfa;
-  --sidebar-primary-foreground: #161519;
-  --sidebar-accent: #232128;
-  --sidebar-accent-foreground: #ffffff;
-  --sidebar-border: #2c2b33;
-  --sidebar-ring: #4b6bfa;
+  --uq-font-family-sans: var(--font-sans-fallback), "TT Interphases Pro",
+    system-ui, sans-serif;
+  --uq-font-family-mono: var(--font-mono-fallback), "JetBrains Mono",
+    ui-monospace, monospace;
 }
 
+/* ---- Light theme override (default) -----------------------------
+ * Tasarım sisteminin default'u dark-first (surface-primary = siyah)
+ * fakat müşteri portalı için light-first daha uygun. Bu nedenle
+ * semantic surface ve text token'larını light'a göre override
+ * ediyoruz. Renk paletleri, brand, status, tag — hepsi token'dan.
+ */
+:root {
+  /* Yüzeyler — light */
+  --uq-color-surface-primary: var(--uq-color-neutral-0);          /* #ffffff */
+  --uq-color-surface-secondary: var(--uq-color-neutral-200);      /* #f6f6f5 */
+  --uq-color-surface-tertiary: var(--uq-color-neutral-300);       /* #edebe9 */
+  --uq-color-surface-overlay: var(--uq-color-graphite-plum-400);
+
+  /* Metin — light (koyu metin) */
+  --uq-color-text-primary: var(--uq-color-graphite-plum-200);     /* #161519 */
+  --uq-color-text-secondary: var(--uq-color-graphite-plum-400);   /* #585866 */
+  --uq-color-text-tertiary: var(--uq-color-graphite-plum-500);    /* #848499 */
+  --uq-color-text-inverse: var(--uq-color-neutral-0);
+  --uq-color-text-on-dark: var(--uq-color-graphite-plum-700);
+
+  /* Çizgiler — light */
+  --uq-color-border-default: var(--uq-color-neutral-400);         /* #d8d4cf */
+  --uq-color-border-subtle: var(--uq-color-neutral-300);
+  --uq-color-border-strong: var(--uq-color-neutral-500);
+
+  /* Sidebar — DARK kalır (tasarım kararı, koyu sol panel) */
+  /* dist/tokens.css'deki default değerler graphite-plum koyu paletinde */
+
+  /* Topbar — açık */
+  --uq-topbar-bg: var(--uq-color-neutral-0);
+  --uq-topbar-border: var(--uq-color-neutral-400);
+
+  /* Input — açık */
+  --uq-input-bg: var(--uq-color-neutral-0);
+  --uq-input-border: var(--uq-color-neutral-400);
+  --uq-input-text: var(--uq-color-graphite-plum-200);
+  --uq-input-placeholder: var(--uq-color-graphite-plum-500);
+
+  /* Table — açık */
+  --uq-table-header-bg: var(--uq-color-neutral-200);
+  --uq-table-header-text: var(--uq-color-graphite-plum-500);
+  --uq-table-row-bg: var(--uq-color-neutral-0);
+  --uq-table-row-bg-hover: var(--uq-color-neutral-200);
+  --uq-table-row-border: var(--uq-color-neutral-300);
+  --uq-table-row-text: var(--uq-color-graphite-plum-200);
+
+  /* Button secondary/ghost — light variant */
+  --uq-button-secondary-bg-hover: var(--uq-color-neutral-200);
+  --uq-button-secondary-text: var(--uq-color-graphite-plum-200);
+  --uq-button-secondary-border: var(--uq-color-neutral-400);
+  --uq-button-ghost-bg-hover: var(--uq-color-neutral-200);
+  --uq-button-ghost-text: var(--uq-color-graphite-plum-200);
+}
+
+/* ---- Dark theme override --------------------------------------- */
 .dark {
-  --background: #0f0e12;
-  --foreground: #f4f4f6;
-  --card: #161519;
-  --card-foreground: #f4f4f6;
-  --popover: #161519;
-  --popover-foreground: #f4f4f6;
-  --surface-secondary: #1c1b21;
-  --surface-tertiary: #232128;
+  --uq-color-surface-primary: var(--uq-color-graphite-plum-100);
+  --uq-color-surface-secondary: var(--uq-color-graphite-plum-200);
+  --uq-color-surface-tertiary: var(--uq-color-graphite-plum-300);
+  --uq-color-text-primary: var(--uq-color-graphite-plum-700);
+  --uq-color-text-secondary: var(--uq-color-graphite-plum-600);
+  --uq-color-text-tertiary: var(--uq-color-graphite-plum-500);
+  --uq-color-border-default: var(--uq-color-graphite-plum-400);
+  --uq-color-border-subtle: var(--uq-color-graphite-plum-300);
+  --uq-color-border-strong: var(--uq-color-graphite-plum-500);
+  --uq-topbar-bg: var(--uq-color-graphite-plum-200);
+  --uq-topbar-border: var(--uq-color-graphite-plum-300);
+  --uq-input-bg: var(--uq-color-graphite-plum-200);
+  --uq-input-border: var(--uq-color-graphite-plum-400);
+  --uq-input-text: var(--uq-color-graphite-plum-700);
+  --uq-input-placeholder: var(--uq-color-graphite-plum-500);
+  --uq-table-header-bg: var(--uq-color-graphite-plum-200);
+  --uq-table-row-bg: var(--uq-color-graphite-plum-100);
+  --uq-table-row-bg-hover: var(--uq-color-graphite-plum-200);
+  --uq-table-row-border: var(--uq-color-graphite-plum-300);
+  --uq-table-row-text: var(--uq-color-graphite-plum-700);
+}
 
-  --primary: #6e62ff;
-  --primary-foreground: #ffffff;
-  --primary-hover: #4b6bfa;
-  --primary-subtle: #232a5e;
+/* ---- shadcn-style aliases → UNIQUE tokens -----------------------
+ * Mevcut bileşenlerde kullanılan --background / --primary gibi
+ * isimleri UNIQUE token'larına yönlendiriyoruz. Bu sayede mevcut
+ * Tailwind utility'leri (bg-background, text-foreground vb.) çalışır,
+ * altta UNIQUE token sistemi vardır.
+ */
+:root {
+  --radius: 0.5rem;
 
-  --secondary: #232128;
-  --secondary-foreground: #f4f4f6;
-  --muted: #232128;
-  --muted-foreground: #b9b8cc;
-  --accent: #232a5e;
-  --accent-foreground: #b9c1ff;
+  --background: var(--uq-color-surface-primary);
+  --foreground: var(--uq-color-text-primary);
+  --card: var(--uq-color-surface-primary);
+  --card-foreground: var(--uq-color-text-primary);
+  --popover: var(--uq-color-surface-primary);
+  --popover-foreground: var(--uq-color-text-primary);
+  --surface-secondary: var(--uq-color-surface-secondary);
+  --surface-tertiary: var(--uq-color-surface-tertiary);
 
-  --destructive: #e25c4f;
-  --destructive-foreground: #ffffff;
-  --success: #49aa50;
-  --warning: #e0a64a;
+  --primary: var(--uq-color-brand-primary);
+  --primary-foreground: var(--uq-color-neutral-0);
+  --primary-hover: var(--uq-color-brand-primary-hover);
+  --primary-subtle: var(--uq-color-brand-primary-subtle);
 
-  --border: #2c2b33;
-  --input: #2c2b33;
-  --ring: #6e62ff;
+  --secondary: var(--uq-color-surface-secondary);
+  --secondary-foreground: var(--uq-color-text-primary);
+  --muted: var(--uq-color-surface-secondary);
+  --muted-foreground: var(--uq-color-text-secondary);
+  --accent: var(--uq-color-surface-secondary);
+  --accent-foreground: var(--uq-color-text-primary);
 
-  --sidebar: #0a090c;
-  --sidebar-foreground: #f4f4f6;
-  --sidebar-muted: #8e8c9b;
-  --sidebar-primary: #6e62ff;
-  --sidebar-primary-foreground: #ffffff;
-  --sidebar-accent: #1c1b21;
-  --sidebar-accent-foreground: #ffffff;
-  --sidebar-border: #232128;
-  --sidebar-ring: #6e62ff;
+  --destructive: var(--uq-color-status-error);
+  --destructive-foreground: var(--uq-color-neutral-0);
+  --success: var(--uq-color-status-success);
+  --warning: var(--uq-color-status-warning);
+
+  --border: var(--uq-color-border-default);
+  --input: var(--uq-color-border-default);
+  --ring: var(--uq-color-brand-primary);
+
+  --sidebar: var(--uq-sidebar-bg);
+  --sidebar-foreground: var(--uq-color-graphite-plum-700);
+  --sidebar-muted: var(--uq-sidebar-item-text);
+  --sidebar-primary: var(--uq-sidebar-item-bg-active);
+  --sidebar-primary-foreground: var(--uq-sidebar-item-text-active);
+  --sidebar-accent: var(--uq-color-graphite-plum-300);
+  --sidebar-accent-foreground: var(--uq-color-neutral-0);
+  --sidebar-border: var(--uq-sidebar-border);
+  --sidebar-ring: var(--uq-color-brand-primary);
 }
 
 @theme inline {
-  --radius-sm: 0px;
-  --radius-md: 0px;
-  --radius-lg: 0px;
-  --radius-xl: 2px;
+  --radius-sm: var(--uq-radius-sm);   /* 0.25rem */
+  --radius-md: var(--uq-radius-md);   /* 0.5rem */
+  --radius-lg: var(--uq-radius-lg);   /* 0.75rem */
+  --radius-xl: var(--uq-radius-xl);   /* 1rem */
 
   --color-background: var(--background);
   --color-foreground: var(--foreground);
@@ -145,8 +200,15 @@
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-ring: var(--sidebar-ring);
 
-  --font-sans: var(--font-mono), "JetBrains Mono", ui-monospace, monospace;
-  --font-mono: var(--font-mono), "JetBrains Mono", ui-monospace, monospace;
+  /* Tag renkleri (UNIQUE 5-renkli sistem) */
+  --color-tag-blue: var(--uq-color-tag-blue);
+  --color-tag-red: var(--uq-color-tag-red);
+  --color-tag-orange: var(--uq-color-tag-orange);
+  --color-tag-green: var(--uq-color-tag-green);
+  --color-tag-purple: var(--uq-color-tag-purple);
+
+  --font-sans: var(--uq-font-family-sans);
+  --font-mono: var(--uq-font-family-mono);
 }
 
 @layer base {
@@ -161,25 +223,215 @@
   body {
     background-color: var(--background);
     color: var(--foreground);
-    font-family: var(--font-mono), "JetBrains Mono", ui-monospace, monospace;
-    font-feature-settings: "ss01", "calt", "liga";
+    font-family: var(--uq-font-family-sans);
+    font-feature-settings: "cv11", "ss01", "calt";
     letter-spacing: -0.005em;
   }
   h1, h2, h3, h4, h5, h6 {
-    letter-spacing: -0.02em;
-    line-height: 1.2;
+    font-family: var(--uq-font-family-sans);
+    letter-spacing: var(--uq-font-letter-spacing-tight);
+    line-height: var(--uq-font-line-height-tight);
+  }
+  code, kbd, samp, pre {
+    font-family: var(--uq-font-family-mono);
   }
   ::selection {
-    background-color: color-mix(in srgb, var(--primary) 22%, transparent);
-    color: var(--foreground);
+    background-color: color-mix(in srgb, var(--uq-color-brand-primary) 22%, transparent);
+    color: var(--uq-color-text-primary);
   }
 }
 
-/* Yardımcı: küçük caps başlık */
-.eyebrow {
-  font-size: 10px;
-  letter-spacing: 0.16em;
-  text-transform: uppercase;
-  font-weight: 600;
-  color: var(--muted-foreground);
+/* ------------------------------------------------------------------ *
+ * BEM components — UNIQUE
+ *
+ * Sınıf adı paterni:  uq-<block>__<element>--<modifier>
+ *
+ *   uq-button                 (block)
+ *   uq-button__icon           (element)
+ *   uq-button--primary        (modifier)
+ *   uq-button--size-lg        (modifier with namespace)
+ *
+ * Token'lara bağlı; Tailwind utility kullanmaz.
+ * ------------------------------------------------------------------ */
+
+@layer components {
+  /* ---------- Button ---------- */
+  .uq-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--uq-spacing-2);
+    white-space: nowrap;
+    font-family: var(--uq-button-font-family, var(--uq-font-family-sans));
+    font-weight: var(--uq-button-font-weight);
+    font-size: var(--uq-button-font-size);
+    line-height: 1;
+    padding: var(--uq-button-padding-y) var(--uq-button-padding-x);
+    border-radius: var(--uq-button-radius);
+    border: 1px solid transparent;
+    transition: background-color 120ms ease, color 120ms ease,
+      border-color 120ms ease, opacity 120ms ease;
+    cursor: pointer;
+    outline: none;
+  }
+  .uq-button:focus-visible {
+    box-shadow: 0 0 0 2px var(--uq-color-surface-primary),
+      0 0 0 4px var(--uq-color-brand-primary);
+  }
+  .uq-button:disabled {
+    opacity: 0.5;
+    pointer-events: none;
+  }
+  .uq-button__icon {
+    flex-shrink: 0;
+    width: 1em;
+    height: 1em;
+  }
+
+  .uq-button--primary {
+    background: var(--uq-button-primary-bg);
+    color: var(--uq-button-primary-text);
+  }
+  .uq-button--primary:hover {
+    background: var(--uq-button-primary-bg-hover);
+  }
+
+  .uq-button--secondary {
+    background: var(--uq-button-secondary-bg);
+    color: var(--uq-button-secondary-text);
+    border-color: var(--uq-button-secondary-border);
+  }
+  .uq-button--secondary:hover {
+    background: var(--uq-button-secondary-bg-hover);
+    color: var(--uq-color-text-primary);
+  }
+
+  .uq-button--ghost {
+    background: var(--uq-button-ghost-bg);
+    color: var(--uq-button-ghost-text);
+  }
+  .uq-button--ghost:hover {
+    background: var(--uq-button-ghost-bg-hover);
+    color: var(--uq-color-text-primary);
+  }
+
+  .uq-button--destructive {
+    background: var(--uq-color-status-error);
+    color: var(--uq-color-neutral-0);
+  }
+  .uq-button--destructive:hover {
+    opacity: 0.9;
+  }
+
+  .uq-button--size-sm {
+    padding: var(--uq-spacing-1) var(--uq-spacing-3);
+    font-size: var(--uq-font-size-xs);
+  }
+  .uq-button--size-lg {
+    padding: var(--uq-spacing-3) var(--uq-spacing-6);
+    font-size: var(--uq-font-size-md);
+  }
+  .uq-button--size-icon {
+    padding: var(--uq-spacing-2);
+    width: 2.25rem;
+    height: 2.25rem;
+  }
+  .uq-button--block {
+    width: 100%;
+  }
+
+  /* ---------- Badge ---------- */
+  .uq-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--uq-spacing-1);
+    padding: var(--uq-badge-padding-y) var(--uq-badge-padding-x);
+    border-radius: var(--uq-badge-radius);
+    font-family: var(--uq-font-family-sans);
+    font-size: var(--uq-badge-font-size);
+    font-weight: var(--uq-badge-font-weight);
+    line-height: 1;
+    white-space: nowrap;
+  }
+  .uq-badge--active {
+    background: var(--uq-badge-active-bg);
+    color: var(--uq-badge-active-text);
+  }
+  .uq-badge--pending {
+    background: var(--uq-badge-pending-bg);
+    color: var(--uq-badge-pending-text);
+  }
+  .uq-badge--waiting {
+    background: var(--uq-badge-waiting-bg);
+    color: var(--uq-badge-waiting-text);
+  }
+  .uq-badge--tag-blue {
+    background: color-mix(in srgb, var(--uq-color-tag-blue) 12%, transparent);
+    color: var(--uq-color-tag-blue);
+  }
+  .uq-badge--tag-red {
+    background: color-mix(in srgb, var(--uq-color-tag-red) 12%, transparent);
+    color: var(--uq-color-tag-red);
+  }
+  .uq-badge--tag-orange {
+    background: color-mix(in srgb, var(--uq-color-tag-orange) 12%, transparent);
+    color: var(--uq-color-tag-orange);
+  }
+  .uq-badge--tag-green {
+    background: color-mix(in srgb, var(--uq-color-tag-green) 12%, transparent);
+    color: var(--uq-color-tag-green);
+  }
+  .uq-badge--tag-purple {
+    background: color-mix(in srgb, var(--uq-color-tag-purple) 12%, transparent);
+    color: var(--uq-color-tag-purple);
+  }
+
+  /* ---------- Card ---------- */
+  .uq-card {
+    background: var(--uq-color-surface-primary);
+    border: 1px solid var(--uq-color-border-default);
+    border-radius: var(--uq-radius-md);
+    overflow: hidden;
+  }
+  .uq-card__header {
+    padding: var(--uq-spacing-4) var(--uq-spacing-6);
+    border-bottom: 1px solid var(--uq-color-border-default);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--uq-spacing-3);
+  }
+  .uq-card__title {
+    font-size: var(--uq-font-size-md);
+    font-weight: var(--uq-font-weight-semibold);
+    line-height: 1.2;
+    margin: 0;
+  }
+  .uq-card__body {
+    padding: var(--uq-spacing-6);
+  }
+  .uq-card__footer {
+    padding: var(--uq-spacing-4) var(--uq-spacing-6);
+    border-top: 1px solid var(--uq-color-border-default);
+  }
+  .uq-card--elevated {
+    background: var(--uq-color-surface-tertiary);
+  }
+
+  /* ---------- Eyebrow / label helper ---------- */
+  .uq-eyebrow {
+    font-family: var(--uq-font-family-sans);
+    font-size: var(--uq-font-size-xs);
+    font-weight: var(--uq-font-weight-medium);
+    letter-spacing: var(--uq-font-letter-spacing-wider);
+    text-transform: uppercase;
+    color: var(--uq-color-text-secondary);
+  }
+
+  /* ---------- Mono data helper (rapor no, fatura no, kod) ---------- */
+  .uq-data {
+    font-family: var(--uq-font-family-mono);
+    font-size: var(--uq-type-app-data-font-size);
+    font-weight: var(--uq-type-app-data-font-weight);
+  }
 }
