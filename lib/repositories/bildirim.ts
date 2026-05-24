@@ -2,7 +2,12 @@ import { query, queryOne } from "@/lib/db";
 import { isAdmin } from "@/lib/permissions";
 import type { SessionUser } from "@/types/db";
 
-export type BildirimTuru = "rapor" | "teklif" | "fatura";
+export type BildirimTuru =
+  | "rapor"
+  | "teklif"
+  | "fatura"
+  | "destek-yeni"
+  | "destek-yanit";
 
 export interface Bildirim {
   id: string;
@@ -51,6 +56,22 @@ interface FaturaEvent {
   Fatura_No: string;
   Tutar: number | null;
   Tarih: Date;
+}
+
+interface DestekYeniEvent {
+  TalepID: number;
+  BASLIK: string | null;
+  KAYIT_TARIHI: string | null;
+  KayitEdenFirma: string | null;
+}
+
+interface DestekYanitEvent {
+  DETAY_ID: number;
+  DESTEK_REF: number;
+  MESAJ: string | null;
+  MESAJ_TARIHI: string | null;
+  Baslik: string | null;
+  GonderenAdi: string | null;
 }
 
 /**
@@ -170,9 +191,94 @@ export async function getBildirimler(
     });
   }
 
+  // ---- Destek olayları ----
+  if (isAdmin(user)) {
+    // Admin: yeni açılan ticketlar
+    const yeniTicketlar = await query<DestekYeniEvent>(
+      `SELECT TOP 30 d.TalepID, d.BASLIK, d.KAYIT_TARIHI, f.Firma_Adi AS KayitEdenFirma
+       FROM DESTEK d
+       LEFT JOIN Firma f ON f.ID = d.KAYIT_EDEN
+       WHERE d.Tarih >= @since
+       ORDER BY d.Tarih DESC, d.ID DESC`,
+      { since }
+    );
+    for (const t of yeniTicketlar) {
+      const tarih = parseTarihText(t.KAYIT_TARIHI);
+      all.push({
+        id: `destek-yeni-${t.TalepID}`,
+        type: "destek-yeni",
+        title: `Yeni destek talebi: ${t.BASLIK ?? "Konu belirtilmemiş"}`,
+        subtitle: t.KayitEdenFirma ?? "Bilinmeyen firma",
+        link: `/destek/${t.TalepID}`,
+        tarih: tarih ?? since,
+      });
+    }
+
+    // Admin: müşterinin yanıtları
+    const musteriYanitlari = await query<DestekYanitEvent>(
+      `SELECT TOP 30 dd.DETAY_ID, dd.DESTEK_REF, dd.MESAJ, dd.MESAJ_TARIHI,
+              d.BASLIK AS Baslik,
+              f.Firma_Adi AS GonderenAdi
+       FROM DESTEK_DETAY dd
+       INNER JOIN DESTEK d ON d.TalepID = dd.DESTEK_REF
+       LEFT JOIN Firma f ON f.ID = dd.KAYIT_EDEN
+       WHERE f.Tur <> 'Admin'
+         AND TRY_CAST(dd.MESAJ_TARIHI AS datetime) >= @since
+       ORDER BY dd.DETAY_ID DESC`,
+      { since }
+    );
+    for (const m of musteriYanitlari) {
+      const tarih = parseTarihText(m.MESAJ_TARIHI);
+      all.push({
+        id: `destek-yanit-${m.DETAY_ID}`,
+        type: "destek-yanit",
+        title: `Müşteri yanıt verdi: ${m.Baslik ?? "Destek talebi"}`,
+        subtitle: m.GonderenAdi ?? "",
+        link: `/destek/${m.DESTEK_REF}`,
+        tarih: tarih ?? since,
+      });
+    }
+  } else if (user.kod) {
+    // Müşteri/Proje: kendi taleplerine gelen admin yanıtları
+    const adminYanitlari = await query<DestekYanitEvent>(
+      `SELECT TOP 30 dd.DETAY_ID, dd.DESTEK_REF, dd.MESAJ, dd.MESAJ_TARIHI,
+              d.BASLIK AS Baslik,
+              f.Firma_Adi AS GonderenAdi
+       FROM DESTEK_DETAY dd
+       INNER JOIN DESTEK d ON d.TalepID = dd.DESTEK_REF
+       LEFT JOIN Firma f ON f.ID = dd.KAYIT_EDEN
+       WHERE d.FirmaKodu = @kod
+         AND f.Tur = 'Admin'
+         AND TRY_CAST(dd.MESAJ_TARIHI AS datetime) >= @since
+       ORDER BY dd.DETAY_ID DESC`,
+      { since, kod: user.kod }
+    );
+    for (const m of adminYanitlari) {
+      const tarih = parseTarihText(m.MESAJ_TARIHI);
+      all.push({
+        id: `destek-yanit-${m.DETAY_ID}`,
+        type: "destek-yanit",
+        title: `Destek yanıtı: ${m.Baslik ?? "Talebiniz"}`,
+        subtitle: m.MESAJ ? truncate(m.MESAJ, 80) : (m.GonderenAdi ?? ""),
+        link: `/destek/${m.DESTEK_REF}`,
+        tarih: tarih ?? since,
+      });
+    }
+  }
+
   // Tarihe göre azalan sırala, en fazla 50 göster
   all.sort((a, b) => b.tarih.getTime() - a.tarih.getTime());
   return all.slice(0, 50);
+}
+
+function parseTarihText(s: string | null | undefined): Date | null {
+  if (!s) return null;
+  const d = new Date(s);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
+function truncate(s: string, n: number) {
+  return s.length > n ? s.slice(0, n - 1) + "…" : s;
 }
 
 export async function getSonGoruldu(firmaId: number): Promise<Date | null> {

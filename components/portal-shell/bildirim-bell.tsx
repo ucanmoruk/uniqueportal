@@ -9,6 +9,8 @@ import {
   FileSpreadsheet,
   Receipt,
   CheckCheck,
+  LifeBuoy,
+  MessageSquare,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -25,12 +27,16 @@ const ICONS: Record<BildirimTuru, React.ComponentType<{ className?: string }>> =
   rapor: FileText,
   teklif: FileSpreadsheet,
   fatura: Receipt,
+  "destek-yeni": LifeBuoy,
+  "destek-yanit": MessageSquare,
 };
 
 const ICON_COLORS: Record<BildirimTuru, string> = {
   rapor: "text-emerald-600 bg-emerald-50 dark:bg-emerald-950/40 dark:text-emerald-300",
   teklif: "text-blue-600 bg-blue-50 dark:bg-blue-950/40 dark:text-blue-300",
   fatura: "text-amber-700 bg-amber-50 dark:bg-amber-950/40 dark:text-amber-300",
+  "destek-yeni": "text-violet-700 bg-violet-50 dark:bg-violet-950/40 dark:text-violet-300",
+  "destek-yanit": "text-violet-700 bg-violet-50 dark:bg-violet-950/40 dark:text-violet-300",
 };
 
 function timeAgo(d: Date): string {

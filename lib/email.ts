@@ -1,0 +1,210 @@
+import { Resend } from "resend";
+
+let __resend: Resend | null = null;
+
+function getResend(): Resend | null {
+  if (__resend) return __resend;
+  const key = process.env.RESEND_API_KEY;
+  if (!key) return null;
+  __resend = new Resend(key);
+  return __resend;
+}
+
+export interface EmailParams {
+  to: string;
+  subject: string;
+  html: string;
+}
+
+/**
+ * Resend ile e-posta gönderir. RESEND_API_KEY ayarlı değilse no-op.
+ * Dönen değer: { sent: boolean, reason?: string }
+ */
+export async function sendEmail({
+  to,
+  subject,
+  html,
+}: EmailParams): Promise<{ sent: boolean; reason?: string; id?: string }> {
+  const resend = getResend();
+  if (!resend) {
+    return { sent: false, reason: "RESEND_API_KEY ayarlı değil" };
+  }
+
+  const from = process.env.EMAIL_FROM ?? "UNIQUE Portal <noreply@resend.dev>";
+
+  try {
+    const { data, error } = await resend.emails.send({
+      from,
+      to: [to],
+      subject,
+      html,
+    });
+    if (error) {
+      console.error("[email] gönderim hatası:", error);
+      return { sent: false, reason: error.message };
+    }
+    return { sent: true, id: data?.id };
+  } catch (err) {
+    console.error("[email] beklenmeyen hata:", err);
+    return { sent: false, reason: (err as Error).message };
+  }
+}
+
+/** Basit HTML email layout */
+export function emailLayout(opts: {
+  title: string;
+  preheader?: string;
+  bodyHtml: string;
+  ctaLabel?: string;
+  ctaUrl?: string;
+  footerNote?: string;
+}): string {
+  const base = process.env.AUTH_URL ?? "https://portal";
+  const cta =
+    opts.ctaUrl && opts.ctaLabel
+      ? `<a href="${opts.ctaUrl}" style="display:inline-block;background:#463aed;color:#fff;padding:12px 24px;text-decoration:none;font-weight:600;font-family:'JetBrains Mono',monospace;text-transform:uppercase;letter-spacing:0.08em;font-size:13px;margin-top:24px;">${opts.ctaLabel}</a>`
+      : "";
+
+  return `<!doctype html>
+<html lang="tr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${opts.title}</title></head>
+<body style="margin:0;padding:0;background:#f4f4f6;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;color:#161519;line-height:1.5;">
+${opts.preheader ? `<div style="display:none;max-height:0;overflow:hidden;opacity:0;color:transparent;">${opts.preheader}</div>` : ""}
+<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background:#f4f4f6;padding:32px 16px;">
+  <tr><td align="center">
+    <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="600" style="max-width:600px;background:#ffffff;border:1px solid #e5e5ea;">
+      <tr><td style="padding:24px 32px;border-bottom:1px solid #e5e5ea;">
+        <div style="font-family:'JetBrains Mono',ui-monospace,monospace;font-weight:700;font-size:14px;color:#161519;">UNIQUE</div>
+        <div style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:10px;letter-spacing:0.16em;text-transform:uppercase;color:#585866;">Services Portal</div>
+      </td></tr>
+      <tr><td style="padding:32px;">
+        <h1 style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:22px;line-height:1.2;margin:0 0 16px;color:#161519;letter-spacing:-0.02em;">${opts.title}</h1>
+        <div style="font-size:15px;line-height:1.6;color:#161519;">${opts.bodyHtml}</div>
+        ${cta}
+      </td></tr>
+      <tr><td style="padding:20px 32px;border-top:1px solid #e5e5ea;background:#fafafa;font-size:12px;color:#585866;">
+        ${opts.footerNote ?? "Bu mesaj UNIQUE Services Portal tarafından otomatik gönderilmiştir."}
+        <div style="margin-top:8px;"><a href="${base}" style="color:#463aed;text-decoration:none;">${base.replace(/^https?:\/\//, "")}</a></div>
+      </td></tr>
+    </table>
+  </td></tr>
+</table>
+</body></html>`;
+}
+
+// ---- Hazır şablonlar -----------------------------------------------------
+
+export interface RaporMailData {
+  firmaAdi: string;
+  raporAdi: string;
+  raporNo: string;
+}
+
+export function raporYuklendiTemplate(d: RaporMailData) {
+  return {
+    subject: `Yeni rapor yüklendi: ${d.raporAdi}`,
+    html: emailLayout({
+      title: "Raporunuz hazır",
+      preheader: `${d.raporAdi} raporunuz portala yüklendi.`,
+      bodyHtml: `
+        <p>Sayın <strong>${d.firmaAdi}</strong>,</p>
+        <p>Talebiniz üzerine hazırlanan rapor portala yüklendi:</p>
+        <table cellpadding="6" cellspacing="0" border="0" style="margin:16px 0;border:1px solid #e5e5ea;border-collapse:collapse;font-size:14px;">
+          <tr><td style="background:#fafafa;border:1px solid #e5e5ea;color:#585866;text-transform:uppercase;font-size:11px;letter-spacing:0.08em;">Rapor No</td><td style="border:1px solid #e5e5ea;">${d.raporNo}</td></tr>
+          <tr><td style="background:#fafafa;border:1px solid #e5e5ea;color:#585866;text-transform:uppercase;font-size:11px;letter-spacing:0.08em;">Belge</td><td style="border:1px solid #e5e5ea;">${d.raporAdi}</td></tr>
+        </table>
+        <p>Raporu portaldan görüntüleyebilir veya indirebilirsiniz.</p>
+      `,
+      ctaLabel: "Belgelere Git",
+      ctaUrl: (process.env.AUTH_URL ?? "") + "/belgeler",
+    }),
+  };
+}
+
+export interface TeklifMailData {
+  firmaAdi: string;
+  teklifNo: string;
+  aciklama?: string | null;
+}
+
+export function teklifOlusturulduTemplate(d: TeklifMailData) {
+  return {
+    subject: `Yeni teklif: ${d.teklifNo}`,
+    html: emailLayout({
+      title: "Yeni teklifiniz var",
+      preheader: `${d.teklifNo} numaralı teklif portala yüklendi.`,
+      bodyHtml: `
+        <p>Sayın <strong>${d.firmaAdi}</strong>,</p>
+        <p>Sizin için <strong>${d.teklifNo}</strong> numaralı teklif hazırlandı.${d.aciklama ? ` Konu: <em>${d.aciklama}</em>.` : ""}</p>
+        <p>Teklifi inceleyip portal üzerinden onaylayabilirsiniz.</p>
+      `,
+      ctaLabel: "Teklifi Görüntüle",
+      ctaUrl: (process.env.AUTH_URL ?? "") + "/teklifler",
+    }),
+  };
+}
+
+export interface FaturaMailData {
+  firmaAdi: string;
+  faturaNo: string;
+  toplam: number | null;
+}
+
+export function faturaOlusturulduTemplate(d: FaturaMailData) {
+  return {
+    subject: `Yeni fatura: ${d.faturaNo}`,
+    html: emailLayout({
+      title: "Yeni faturanız hazır",
+      preheader: `${d.faturaNo} numaralı fatura oluşturuldu.`,
+      bodyHtml: `
+        <p>Sayın <strong>${d.firmaAdi}</strong>,</p>
+        <p><strong>${d.faturaNo}</strong> numaralı fatura cari hesabınıza işlendi${d.toplam != null ? ` (toplam: <strong>${d.toplam.toLocaleString("tr-TR")} ₺</strong>)` : ""}.</p>
+      `,
+      ctaLabel: "Faturalara Git",
+      ctaUrl: (process.env.AUTH_URL ?? "") + "/faturalar",
+    }),
+  };
+}
+
+export interface DestekYeniMailData {
+  baslik: string;
+  acanFirma: string;
+  talepId: number;
+}
+
+export function destekYeniTemplate(d: DestekYeniMailData) {
+  return {
+    subject: `Yeni destek talebi: ${d.baslik}`,
+    html: emailLayout({
+      title: "Yeni destek talebi",
+      bodyHtml: `
+        <p><strong>${d.acanFirma}</strong> tarafından yeni bir destek talebi açıldı.</p>
+        <p><strong>Konu:</strong> ${d.baslik}</p>
+      `,
+      ctaLabel: "Talebi Aç",
+      ctaUrl: (process.env.AUTH_URL ?? "") + "/destek/" + d.talepId,
+    }),
+  };
+}
+
+export interface DestekYanitMailData {
+  firmaAdi: string;
+  baslik: string;
+  talepId: number;
+  mesajOzeti: string;
+}
+
+export function destekYanitTemplate(d: DestekYanitMailData) {
+  return {
+    subject: `Destek talebinize yanıt geldi: ${d.baslik}`,
+    html: emailLayout({
+      title: "Destek talebinize yanıt geldi",
+      bodyHtml: `
+        <p>Sayın <strong>${d.firmaAdi}</strong>,</p>
+        <p><strong>${d.baslik}</strong> başlıklı destek talebinize yeni bir yanıt geldi:</p>
+        <blockquote style="margin:16px 0;padding:12px 16px;background:#fafafa;border-left:3px solid #463aed;font-size:14px;color:#161519;">${d.mesajOzeti}</blockquote>
+      `,
+      ctaLabel: "Talebi Görüntüle",
+      ctaUrl: (process.env.AUTH_URL ?? "") + "/destek/" + d.talepId,
+    }),
+  };
+}

@@ -2,6 +2,8 @@ import { query, queryOne, getPool, sql } from "@/lib/db";
 import { isAdmin, scopeByFirma } from "@/lib/permissions";
 import type { SessionUser } from "@/types/db";
 
+// isAdmin yukarıdan import edildi — listUserRelatedItems içinde kullanılır
+
 export interface DestekListItem {
   ID: number;
   TALEP_ID: number;
@@ -138,9 +140,100 @@ export async function addDestekMesaj(
   }
 }
 
+export interface UserRelatedItem {
+  type: "Teklif" | "Rapor" | "Fatura";
+  id: number;
+  label: string;
+  subtitle: string;
+}
+
+export async function listUserRelatedItems(
+  user: SessionUser
+): Promise<UserRelatedItem[]> {
+  // Admin destek açtığında kendi adına ilgili kayıt seçmez; bu da
+  // büyük view'larda yavaş scan yaratır. Admin için boş dön.
+  if (isAdmin(user)) return [];
+
+  const items: UserRelatedItem[] = [];
+
+  // Teklifler (son 50)
+  const teklifler = await query<{
+    ID: number;
+    "Teklif No": string;
+    Tarih: Date | null;
+    Aciklama: string | null;
+  }>(
+    `SELECT TOP 50 ID, [Teklif No], Tarih, Aciklama
+     FROM VIEW_TEKLIFLERIM
+     WHERE (FirmaID = @id OR ProjeID = @id)
+     ORDER BY Tarih DESC, ID DESC`,
+    { id: user.id }
+  ).catch(() => []);
+
+  for (const t of teklifler) {
+    items.push({
+      type: "Teklif",
+      id: t.ID,
+      label: `${t["Teklif No"]}`,
+      subtitle: t.Aciklama ?? "",
+    });
+  }
+
+  // Raporlar (son 50, firma adına göre)
+  if (user.firmaAdi) {
+    const raporlar = await query<{
+      ID: number;
+      RaporID: string | null;
+      "Dosya Adı": string | null;
+      Tarih: Date | null;
+    }>(
+      `SELECT TOP 50 ID, RaporID, [Dosya Adı], Tarih
+       FROM VIEW_RAPOR
+       WHERE Durum = 'Aktif' AND ([Müşteri] = @firma OR Proje = @firma)
+       ORDER BY Tarih DESC, ID DESC`,
+      { firma: user.firmaAdi }
+    ).catch(() => []);
+    for (const r of raporlar) {
+      items.push({
+        type: "Rapor",
+        id: r.ID,
+        label: r.RaporID ?? `#${r.ID}`,
+        subtitle: r["Dosya Adı"] ?? "",
+      });
+    }
+  }
+
+  // Faturalar (son 50)
+  const faturalar = await query<{
+    ID: number;
+    "Fatura No": string;
+    Tarih: Date | null;
+  }>(
+    `SELECT TOP 50 ID, [Fatura No], Tarih
+     FROM VIEW_FATURA
+     WHERE FaturaFirmaID = @id OR Proje_ID = @id
+     ORDER BY Tarih DESC, ID DESC`,
+    { id: user.id }
+  ).catch(() => []);
+  for (const f of faturalar) {
+    items.push({
+      type: "Fatura",
+      id: f.ID,
+      label: f["Fatura No"],
+      subtitle: "",
+    });
+  }
+
+  return items;
+}
+
 export async function createDestekTalep(
   user: SessionUser,
-  data: { baslik: string; aciklama: string }
+  data: {
+    baslik: string;
+    aciklama: string;
+    ilgili?: { type: "Teklif" | "Rapor" | "Fatura"; id: number; label: string } | null;
+  }
 ): Promise<number> {
   const pool = await getPool();
   const tx = new sql.Transaction(pool);
@@ -170,14 +263,17 @@ export async function createDestekTalep(
       );
     const talepId = inserted.recordset[0].ID;
 
-    // 3) DESTEK kaydı
+    // 3) DESTEK kaydı — ilgili kayıt varsa açıklamanın başına etiket gömüyoruz
     const tarih = new Date().toISOString().slice(0, 19).replace("T", " ");
+    const aciklamaTam = data.ilgili
+      ? `[İlgili: ${data.ilgili.type} ${data.ilgili.label}]\n\n${data.aciklama}`
+      : data.aciklama;
     await new sql.Request(tx)
       .input("no", sql.VarChar(100), `D${yeniNo}`)
       .input("tur", sql.NVarChar(6), "Web")
       .input("konu", sql.TinyInt, 1)
       .input("baslik", sql.VarChar(255), data.baslik)
-      .input("aciklama", sql.Text, data.aciklama)
+      .input("aciklama", sql.Text, aciklamaTam)
       .input("kt", sql.VarChar(50), tarih)
       .input("kim", sql.Int, user.id)
       .input("durum", sql.NVarChar(20), "Yeni Talep")

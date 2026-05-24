@@ -1,0 +1,8 @@
+{
+  "crons": [
+    {
+      "path": "/api/cron/bildirim-gonder",
+      "schedule": "*/15 * * * *"
+    }
+  ]
+}
