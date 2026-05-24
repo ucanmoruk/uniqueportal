@@ -76,7 +76,7 @@
   --uq-color-border-strong: var(--uq-color-neutral-500);
 
   /* Sidebar — light variant (override on dark default) */
-  --uq-sidebar-bg: var(--uq-color-neutral-0);                       /* #ffffff */
+  --uq-sidebar-bg: var(--uq-color-neutral-100);                     /* #fefefd */
   --uq-sidebar-border: var(--uq-color-neutral-300);                 /* #edebe9 */
   --uq-sidebar-item-text: var(--uq-color-graphite-plum-400);        /* #585866 */
   --uq-sidebar-item-text-hover: var(--uq-color-graphite-plum-200);  /* #161519 */
