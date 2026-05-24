@@ -18,6 +18,25 @@
  *   ✗  var(--uq-color-signal-blue-300)
  * ------------------------------------------------------------------ */
 
+/* ---- Radius override — köşeler tamamen kare --------------------
+ * Tasarım kararı: portal genelinde border-radius YOK.
+ * Primitive radius tokens + component radius'larını sıfırlıyoruz.
+ * Badge, button, input, card — hepsi keskin köşeli.
+ */
+:root {
+  --uq-radius-none: 0;
+  --uq-radius-sm: 0;
+  --uq-radius-md: 0;
+  --uq-radius-lg: 0;
+  --uq-radius-xl: 0;
+  --uq-radius-2xl: 0;
+  --uq-radius-full: 0;
+
+  --uq-button-radius: 0;
+  --uq-input-radius: 0;
+  --uq-badge-radius: 0;
+}
+
 /* ---- Font override ---------------------------------------------
  * Portal genelinde tek font ailesi: JetBrains Mono.
  * (UNIQUE design system default'u TT Interphases Pro sans; ürün
@@ -123,7 +142,7 @@
  * altta UNIQUE token sistemi vardır.
  */
 :root {
-  --radius: 0.5rem;
+  --radius: 0;
 
   --background: var(--uq-color-surface-primary);
   --foreground: var(--uq-color-text-primary);
