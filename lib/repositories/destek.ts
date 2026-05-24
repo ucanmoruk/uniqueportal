@@ -93,6 +93,8 @@ export async function getDestekDetail(
   return { header, mesajlar };
 }
 
+import { sendText, toWhatsAppAddress, isWhatsAppEnabled } from "@/lib/whatsapp";
+
 export async function addDestekMesaj(
   user: SessionUser,
   talepId: number,
@@ -134,6 +136,38 @@ export async function addDestekMesaj(
       .query(`UPDATE Talep SET Durum = @durum WHERE ID = @id`);
 
     await tx.commit();
+
+    // Admin yanıtı + WhatsApp etkin + ticket WA kaynaklı ise WhatsApp ile gönder
+    if (isAdmin(user) && isWhatsAppEnabled()) {
+      try {
+        const ticket = await queryOne<{
+          TUR: string | null;
+          MusteriTelefon: string | null;
+          MusteriFirma: string | null;
+          Baslik: string | null;
+        }>(
+          `SELECT TOP 1 d.TUR, mf.Telefon AS MusteriTelefon,
+                  mf.Firma_Adi AS MusteriFirma, d.BASLIK AS Baslik
+           FROM DESTEK d
+           LEFT JOIN Firma mf ON mf.Kod = d.FirmaKodu
+           WHERE d.TalepID = @id`,
+          { id: talepId }
+        );
+
+        if (ticket?.MusteriTelefon) {
+          const wa = toWhatsAppAddress(ticket.MusteriTelefon);
+          if (wa) {
+            await sendText(
+              wa,
+              `${ticket.MusteriFirma ?? ""}, "${ticket.Baslik ?? "Destek"}" talebinize yanıt:\n\n${mesaj}`
+            );
+          }
+        }
+      } catch (err) {
+        console.error("[addDestekMesaj] WhatsApp gönderim hatası:", err);
+        // WhatsApp hatası transaction'ı bozmaz
+      }
+    }
   } catch (err) {
     await tx.rollback();
     throw err;

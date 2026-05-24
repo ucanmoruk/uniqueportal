@@ -208,3 +208,110 @@ export function destekYanitTemplate(d: DestekYanitMailData) {
     }),
   };
 }
+
+// ---- Digest (toplu özet) -------------------------------------------------
+
+export interface DigestItem {
+  type: "rapor" | "teklif" | "fatura" | "destek-yanit";
+  baslik: string;       // ana satır (ör. "ASETON - 26260547")
+  altBaslik?: string;   // küçük satır (rapor no, teklif no, tutar)
+  link?: string;        // CTA için (ilk öğenin linki kullanılır)
+}
+
+export interface DigestMailData {
+  firmaAdi: string;
+  raporlar: DigestItem[];
+  teklifler: DigestItem[];
+  faturalar: DigestItem[];
+  destekYanitlari: DigestItem[];
+}
+
+function digestSection(title: string, items: DigestItem[]): string {
+  if (items.length === 0) return "";
+  const rows = items
+    .slice(0, 20) // ilk 20 öğeyi göster, fazlasını sayı olarak yaz
+    .map(
+      (it) => `
+      <tr>
+        <td style="padding:8px 12px;border-bottom:1px solid #edebe9;font-size:14px;">
+          <div style="font-weight:600;color:#161519;">${it.baslik}</div>
+          ${
+            it.altBaslik
+              ? `<div style="font-size:12px;color:#585866;font-family:'JetBrains Mono',monospace;">${it.altBaslik}</div>`
+              : ""
+          }
+        </td>
+      </tr>`
+    )
+    .join("");
+  const fazlasi =
+    items.length > 20
+      ? `<tr><td style="padding:8px 12px;font-size:13px;color:#585866;background:#fafafa;">…ve ${items.length - 20} tane daha</td></tr>`
+      : "";
+
+  return `
+    <div style="margin-top:24px;">
+      <div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.14em;color:#585866;margin-bottom:8px;">
+        ${title} <span style="color:#463aed;">(${items.length})</span>
+      </div>
+      <table cellpadding="0" cellspacing="0" border="0" width="100%" style="border:1px solid #edebe9;border-collapse:collapse;">
+        ${rows}
+        ${fazlasi}
+      </table>
+    </div>`;
+}
+
+export function digestTemplate(d: DigestMailData) {
+  const total =
+    d.raporlar.length +
+    d.teklifler.length +
+    d.faturalar.length +
+    d.destekYanitlari.length;
+
+  if (total === 0) return null;
+
+  const counts: string[] = [];
+  if (d.raporlar.length) counts.push(`${d.raporlar.length} rapor`);
+  if (d.teklifler.length) counts.push(`${d.teklifler.length} teklif`);
+  if (d.faturalar.length) counts.push(`${d.faturalar.length} fatura`);
+  if (d.destekYanitlari.length)
+    counts.push(`${d.destekYanitlari.length} destek yanıtı`);
+
+  const subjectSummary = counts.join(", ");
+  const subject =
+    total === 1
+      ? buildSingleSubject(d)
+      : `${total} yeni güncelleme: ${subjectSummary}`;
+
+  const bodyHtml = `
+    <p>Sayın <strong>${d.firmaAdi}</strong>,</p>
+    <p>Portal hesabınıza son güncellemeler aşağıdadır:</p>
+    ${digestSection("Yeni raporlar", d.raporlar)}
+    ${digestSection("Yeni teklifler", d.teklifler)}
+    ${digestSection("Yeni faturalar", d.faturalar)}
+    ${digestSection("Destek yanıtları", d.destekYanitlari)}
+  `;
+
+  return {
+    subject,
+    html: emailLayout({
+      title: "Hesabınızdaki güncellemeler",
+      preheader: subjectSummary,
+      bodyHtml,
+      ctaLabel: "Portala Git",
+      ctaUrl: (process.env.AUTH_URL ?? "") + "/ozet",
+    }),
+  };
+}
+
+function buildSingleSubject(d: DigestMailData): string {
+  const r = d.raporlar[0];
+  if (r) return `Yeni rapor yüklendi: ${r.baslik}`;
+  const t = d.teklifler[0];
+  if (t) return `Yeni teklif: ${t.baslik}`;
+  const f = d.faturalar[0];
+  if (f) return `Yeni fatura: ${f.baslik}`;
+  const s = d.destekYanitlari[0];
+  if (s) return `Destek talebinize yanıt geldi: ${s.baslik}`;
+  return "Portal güncellemesi";
+}
