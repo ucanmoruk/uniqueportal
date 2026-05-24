@@ -95,17 +95,21 @@ export function UniqueIcon({
       {...rest}
     >
       {/* 8 adet blade, her biri 45° farkla döndürülmüş.
-          Tek blade tanımı: yukarı doğru, ortadan dış kenara, ucunda V-notch */}
+          Tek blade tanımı (yukarı yönlü):
+          - dış uçta V-notch
+          - genişleyen orta gövde
+          - merkezde tek noktada birleşir
+       */}
       {[0, 45, 90, 135, 180, 225, 270, 315].map((angle) => (
         <g key={angle} transform={`rotate(${angle} 50 50)`}>
           <polygon
             points="
-              44,10
-              50,18
-              56,10
-              60,35
-              50,42
-              40,35
+              40,4
+              50,20
+              60,4
+              62,32
+              50,50
+              38,32
             "
           />
         </g>

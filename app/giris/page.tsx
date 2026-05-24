@@ -22,10 +22,7 @@ export default function LoginPage() {
         <div className="relative z-10 px-16 max-w-2xl">
           {/* Marka */}
           <div className="mb-14">
-            <UniqueLogo size="lg" />
-            <div className="mt-2 text-[10px] uppercase tracking-[0.16em] text-sidebar-muted">
-              Services Portal
-            </div>
+            <UniqueLogo size="xl" />
           </div>
 
           {/* Eyebrow */}
@@ -61,10 +58,7 @@ export default function LoginPage() {
       <div className="flex items-center justify-center p-6 sm:p-12 bg-background">
         <div className="w-full max-w-sm">
           <div className="lg:hidden mb-10">
-            <UniqueLogo size="md" />
-            <div className="mt-1.5 text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
-              Services Portal
-            </div>
+            <UniqueLogo size="lg" />
           </div>
 
           <div className="mb-10">

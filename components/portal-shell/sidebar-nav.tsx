@@ -83,11 +83,8 @@ function NavContent({ user, signOutAction, bildirimler, lastSeen }: Props) {
     <div className="flex flex-col h-full w-full overflow-hidden">
       {/* Brand */}
       <div className="px-5 py-5 border-b border-sidebar-border">
-        <Link href="/ozet" className="flex flex-col gap-1.5">
-          <UniqueLogo size="sm" />
-          <span className="text-[10px] uppercase tracking-[0.16em] text-sidebar-muted">
-            Services Portal
-          </span>
+        <Link href="/ozet" className="flex items-center">
+          <UniqueLogo size="md" />
         </Link>
       </div>
 
