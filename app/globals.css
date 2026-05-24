@@ -35,6 +35,10 @@
   --uq-button-radius: 0;
   --uq-input-radius: 0;
   --uq-badge-radius: 0;
+
+  /* Button padding override — daha kompakt yatay, daha rahat dikey */
+  --uq-button-padding-x: 0.75rem;   /* 12px */
+  --uq-button-padding-y: 0.625rem;  /* 10px */
 }
 
 /* ---- Font override ---------------------------------------------
@@ -351,15 +355,15 @@
   }
 
   .uq-button--size-sm {
-    padding: var(--uq-spacing-1) var(--uq-spacing-3);
+    padding: 0.5rem 0.625rem;    /* y:8px  x:10px */
     font-size: var(--uq-font-size-xs);
   }
   .uq-button--size-lg {
-    padding: var(--uq-spacing-3) var(--uq-spacing-6);
+    padding: 0.875rem 1rem;      /* y:14px x:16px */
     font-size: var(--uq-font-size-md);
   }
   .uq-button--size-icon {
-    padding: var(--uq-spacing-2);
+    padding: 0.5rem;
     width: 2.25rem;
     height: 2.25rem;
   }
