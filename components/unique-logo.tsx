@@ -43,6 +43,8 @@ export function UniqueLogo({
   const isWordmarkOnly = wordmark === "wordmark";
 
   // Image OK — kullan
+  // Sıralı: önce .png (kullanıcının yüklediği orijinal asset), yoksa .svg
+  // (çok yakın tipografi/yıldız). İkisi de yoksa SVG fallback (UniqueIconFallback).
   if (!imgFailed && !isWordmarkOnly) {
     return (
       <div
@@ -54,7 +56,14 @@ export function UniqueLogo({
         <img
           src="/unique-logo.png"
           alt="UNIQUE ANALYSE"
-          onError={() => setImgFailed(true)}
+          onError={(e) => {
+            const el = e.currentTarget;
+            if (el.src.endsWith(".png")) {
+              el.src = "/unique-logo.svg";
+            } else {
+              setImgFailed(true);
+            }
+          }}
           className={cn(
             isIconOnly ? s.iconBox : s.height,
             "w-auto object-contain select-none"

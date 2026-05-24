@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 100" preserveAspectRatio="xMinYMid meet" role="img" aria-label="UNIQUE ANALYSE">
+  <!-- 8-uçlu yıldız ikonu, ortalanmış 100x100 alanda -->
+  <g transform="translate(10,10)" fill="#161519">
+    <g>
+      <polygon points="32,2 40,18 48,2 46,30 40,40 34,30" transform="rotate(0 40 40)"/>
+      <polygon points="32,2 40,18 48,2 46,30 40,40 34,30" transform="rotate(45 40 40)"/>
+      <polygon points="32,2 40,18 48,2 46,30 40,40 34,30" transform="rotate(90 40 40)"/>
+      <polygon points="32,2 40,18 48,2 46,30 40,40 34,30" transform="rotate(135 40 40)"/>
+      <polygon points="32,2 40,18 48,2 46,30 40,40 34,30" transform="rotate(180 40 40)"/>
+      <polygon points="32,2 40,18 48,2 46,30 40,40 34,30" transform="rotate(225 40 40)"/>
+      <polygon points="32,2 40,18 48,2 46,30 40,40 34,30" transform="rotate(270 40 40)"/>
+      <polygon points="32,2 40,18 48,2 46,30 40,40 34,30" transform="rotate(315 40 40)"/>
+    </g>
+  </g>
+
+  <!-- Wordmark -->
+  <text x="120" y="78" font-family="'JetBrains Mono', ui-monospace, monospace" font-weight="700" font-size="78" letter-spacing="-2">
+    <tspan fill="#161519">UNIQUE</tspan>
+    <tspan dx="20" fill="#463aed">ANALYSE</tspan>
+  </text>
+</svg>
