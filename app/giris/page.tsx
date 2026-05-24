@@ -1,6 +1,6 @@
 import { Suspense } from "react";
 import { LoginForm } from "./login-form";
-import { FlaskConical } from "lucide-react";
+import { UniqueLogo } from "@/components/unique-logo";
 
 export const metadata = {
   title: "Giriş — UNIQUE Services Portal",
@@ -21,15 +21,10 @@ export default function LoginPage() {
         />
         <div className="relative z-10 px-16 max-w-2xl">
           {/* Marka */}
-          <div className="mb-14 inline-flex items-center gap-3">
-            <span className="inline-flex items-center justify-center w-11 h-11 bg-sidebar-primary text-sidebar-primary-foreground">
-              <FlaskConical className="size-6" />
-            </span>
-            <div className="leading-tight">
-              <div className="text-lg font-bold tracking-tight">UNIQUE</div>
-              <div className="text-[10px] uppercase tracking-[0.16em] text-sidebar-muted">
-                Services Portal
-              </div>
+          <div className="mb-14">
+            <UniqueLogo size="lg" />
+            <div className="mt-2 text-[10px] uppercase tracking-[0.16em] text-sidebar-muted">
+              Services Portal
             </div>
           </div>
 
@@ -66,16 +61,9 @@ export default function LoginPage() {
       <div className="flex items-center justify-center p-6 sm:p-12 bg-background">
         <div className="w-full max-w-sm">
           <div className="lg:hidden mb-10">
-            <div className="inline-flex items-center gap-3">
-              <span className="inline-flex items-center justify-center w-10 h-10 bg-primary text-primary-foreground">
-                <FlaskConical className="size-5" />
-              </span>
-              <div className="leading-tight">
-                <div className="font-bold tracking-tight">UNIQUE</div>
-                <div className="text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
-                  Services Portal
-                </div>
-              </div>
+            <UniqueLogo size="md" />
+            <div className="mt-1.5 text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
+              Services Portal
             </div>
           </div>
 

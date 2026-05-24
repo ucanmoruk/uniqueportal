@@ -13,11 +13,11 @@ import {
   Upload,
   LifeBuoy,
   User,
-  FlaskConical,
   Menu,
   X,
   LogOut,
 } from "lucide-react";
+import { UniqueLogo } from "@/components/unique-logo";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/theme-toggle";
@@ -83,18 +83,11 @@ function NavContent({ user, signOutAction, bildirimler, lastSeen }: Props) {
     <div className="flex flex-col h-full w-full overflow-hidden">
       {/* Brand */}
       <div className="px-5 py-5 border-b border-sidebar-border">
-        <Link href="/ozet" className="flex items-center gap-3">
-          <span className="inline-flex items-center justify-center size-9 bg-sidebar-primary text-sidebar-primary-foreground">
-            <FlaskConical className="size-5" />
+        <Link href="/ozet" className="flex flex-col gap-1.5">
+          <UniqueLogo size="sm" />
+          <span className="text-[10px] uppercase tracking-[0.16em] text-sidebar-muted">
+            Services Portal
           </span>
-          <div className="flex flex-col leading-tight">
-            <span className="font-bold tracking-tight text-sidebar-foreground text-[15px]">
-              UNIQUE
-            </span>
-            <span className="text-[10px] uppercase tracking-[0.16em] text-sidebar-muted">
-              Services Portal
-            </span>
-          </div>
         </Link>
       </div>
 
@@ -209,11 +202,8 @@ export function MobileTopBar({
       >
         <Menu className="size-5" />
       </Button>
-      <Link href="/ozet" className="flex items-center gap-2 font-bold">
-        <span className="inline-flex items-center justify-center size-7 bg-primary text-primary-foreground">
-          <FlaskConical className="size-4" />
-        </span>
-        <span>UNIQUE</span>
+      <Link href="/ozet" className="flex items-center">
+        <UniqueLogo size="sm" />
       </Link>
       <div className="ml-auto flex items-center gap-1">
         <BildirimBell
