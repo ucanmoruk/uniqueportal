@@ -1,5 +1,10 @@
-import { auth } from "@/lib/auth";
+import NextAuth from "next-auth";
 import { NextResponse } from "next/server";
+import { authConfig } from "@/lib/auth.config";
+
+// Edge runtime ile uyumlu olması için MSSQL'e bağımlı olan
+// `lib/auth.ts` yerine sadece `authConfig`'i kullanıyoruz.
+const { auth } = NextAuth(authConfig);
 
 export default auth((req) => {
   const isLoggedIn = !!req.auth;

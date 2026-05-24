@@ -1,33 +1,15 @@
-import NextAuth, { type DefaultSession } from "next-auth";
+import NextAuth from "next-auth";
 import Credentials from "next-auth/providers/credentials";
 import { findFirmaByKod } from "@/lib/repositories/firma";
+import { authConfig } from "@/lib/auth.config";
 
-declare module "next-auth" {
-  interface Session {
-    user: {
-      id: string;
-      kod: string;
-      firmaAdi: string;
-      tur: string;
-      yetkili: string | null;
-      plasiyerId: number | null;
-    } & DefaultSession["user"];
-  }
-}
-
-interface AppJwt {
-  uid: number;
-  kod: string;
-  firmaAdi: string;
-  tur: string;
-  yetkili: string | null;
-  plasiyerId: number | null;
-}
-
+/**
+ * Node.js runtime auth — Credentials provider MSSQL'e bağlanır.
+ * Server actions, route handlers ve sayfaların kullandığı `auth()`,
+ * `handlers`, `signIn`, `signOut` buradan export edilir.
+ */
 export const { handlers, signIn, signOut, auth } = NextAuth({
-  trustHost: true,
-  session: { strategy: "jwt", maxAge: 60 * 60 * 8 },
-  pages: { signIn: "/giris" },
+  ...authConfig,
   providers: [
     Credentials({
       credentials: {
@@ -37,29 +19,13 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       async authorize(credentials) {
         const kod = (credentials?.kod as string | undefined)?.trim();
         const parola = (credentials?.parola as string | undefined)?.trim();
-        if (!kod || !parola) {
-          console.log("[auth] eksik kod/parola");
-          return null;
-        }
+        if (!kod || !parola) return null;
 
         const firma = await findFirmaByKod(kod);
-        if (!firma) {
-          console.log(`[auth] kod bulunamadı: '${kod}'`);
-          return null;
-        }
+        if (!firma) return null;
 
         const dbParola = (firma.Parola ?? "").trim();
-        if (dbParola !== parola) {
-          console.log(
-            `[auth] parola eşleşmedi kod='${firma.Kod}' ` +
-              `db_len=${dbParola.length} verilen_len=${parola.length}`
-          );
-          return null;
-        }
-
-        console.log(
-          `[auth] giriş başarılı: kod='${firma.Kod}' firma='${firma.Firma_Adi}' tur='${firma.Tur}'`
-        );
+        if (dbParola !== parola) return null;
 
         return {
           id: String(firma.ID),
@@ -73,38 +39,6 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       },
     }),
   ],
-  callbacks: {
-    async jwt({ token, user }) {
-      const t = token as unknown as AppJwt & Record<string, unknown>;
-      if (user) {
-        const u = user as unknown as {
-          id: string;
-          kod: string;
-          firmaAdi: string;
-          tur: string;
-          yetkili: string | null;
-          plasiyerId: number | null;
-        };
-        t.uid = Number(u.id);
-        t.kod = u.kod;
-        t.firmaAdi = u.firmaAdi;
-        t.tur = u.tur;
-        t.yetkili = u.yetkili;
-        t.plasiyerId = u.plasiyerId;
-      }
-      return t as unknown as typeof token;
-    },
-    async session({ session, token }) {
-      const t = token as unknown as AppJwt;
-      session.user.id = String(t.uid);
-      session.user.kod = t.kod;
-      session.user.firmaAdi = t.firmaAdi;
-      session.user.tur = t.tur;
-      session.user.yetkili = t.yetkili;
-      session.user.plasiyerId = t.plasiyerId;
-      return session;
-    },
-  },
 });
 
 export async function requireUser() {
