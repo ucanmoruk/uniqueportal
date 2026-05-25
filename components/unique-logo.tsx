@@ -16,6 +16,8 @@ import { cn } from "@/lib/utils";
 interface UniqueLogoProps extends React.HTMLAttributes<HTMLDivElement> {
   size?: "sm" | "md" | "lg" | "xl";
   wordmark?: "full" | "icon" | "wordmark";
+  /** Koyu zeminde kullanılacaksa: beyaz UNIQUE + açık indigo ANALYSE. */
+  inverted?: boolean;
 }
 
 const SIZE_MAP: Record<NonNullable<UniqueLogoProps["size"]>, {
@@ -33,6 +35,7 @@ const SIZE_MAP: Record<NonNullable<UniqueLogoProps["size"]>, {
 export function UniqueLogo({
   size = "md",
   wordmark = "full",
+  inverted = false,
   className,
   ...rest
 }: UniqueLogoProps) {
@@ -42,10 +45,9 @@ export function UniqueLogo({
   const isIconOnly = wordmark === "icon";
   const isWordmarkOnly = wordmark === "wordmark";
 
-  // Image OK — kullan
-  // Sıralı: önce .jpeg (resmî asset), yoksa .png, yoksa .svg,
-  // yoksa inline SVG fallback (UniqueIconFallback).
-  if (!imgFailed && !isWordmarkOnly) {
+  // Inverted modunda image kullanma — siyah yazılı PNG koyu zeminde yanıltıcı.
+  // SVG + custom renkli HTML wordmark üzerinden render et.
+  if (!inverted && !imgFailed && !isWordmarkOnly) {
     return (
       <div
         className={cn("inline-flex items-center", className)}
@@ -76,14 +78,26 @@ export function UniqueLogo({
     );
   }
 
-  // Fallback — SVG + yazı (image 404 veya wordmark-only mode)
+  // SVG + HTML wordmark (inverted veya image fallback)
+  const iconColorClass = inverted
+    ? "text-[color:var(--uq-color-neutral-0)]"
+    : "text-foreground";
+  const uniqueTextClass = inverted
+    ? "text-[color:var(--uq-color-neutral-0)]"
+    : "text-foreground";
+  const analyseTextClass = inverted
+    ? "text-[color:var(--uq-color-signal-blue-100)]"
+    : "text-primary";
+
   return (
     <div
       className={cn("inline-flex items-center", s.gap, className)}
       aria-label="UNIQUE ANALYSE"
       {...rest}
     >
-      {!isWordmarkOnly && <UniqueIconFallback className={cn(s.iconBox, "shrink-0")} />}
+      {!isWordmarkOnly && (
+        <UniqueIconFallback className={cn(s.iconBox, "shrink-0", iconColorClass)} />
+      )}
       {!isIconOnly && (
         <span
           className={cn(
@@ -91,8 +105,8 @@ export function UniqueLogo({
             s.text
           )}
         >
-          <span className="text-foreground">UNIQUE </span>
-          <span className="text-primary">ANALYSE</span>
+          <span className={uniqueTextClass}>UNIQUE </span>
+          <span className={analyseTextClass}>ANALYSE</span>
         </span>
       )}
     </div>

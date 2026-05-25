@@ -8,9 +8,9 @@ export const metadata = {
 
 export default function LoginPage() {
   return (
-    <div className="min-h-screen w-full grid lg:grid-cols-[1.1fr_minmax(440px,520px)] bg-background">
-      {/* Sol panel — UNIQUE marka mesajı (Webflow tarzı) */}
-      <div className="relative hidden lg:flex items-center bg-sidebar text-sidebar-foreground overflow-hidden">
+    <div className="min-h-screen w-full grid lg:grid-cols-[1.1fr_minmax(440px,520px)]">
+      {/* Sol panel — koyu zemin, marka mesajı */}
+      <div className="uq-hero-dark relative hidden lg:flex items-center overflow-hidden">
         <div
           className="absolute inset-0 opacity-[0.06]"
           style={{
@@ -22,39 +22,41 @@ export default function LoginPage() {
         <div className="relative z-10 px-16 max-w-2xl">
           {/* Marka */}
           <div className="mb-14">
-            <UniqueLogo size="xl" />
+            <UniqueLogo size="xl" inverted />
           </div>
 
           {/* Eyebrow */}
-          <div className="mb-6 text-[10px] font-semibold tracking-[0.18em] uppercase text-sidebar-primary">
+          <div className="mb-6 text-[10px] font-semibold tracking-[0.18em] uppercase text-[color:var(--uq-color-signal-blue-100)]">
             ▸ Müşteri Portalı
           </div>
 
           {/* Hero başlık */}
-          <h1 className="text-[clamp(2rem,1.5rem+2vw,3.25rem)] font-bold uppercase leading-[1.05] tracking-tight mb-7">
+          <h1 className="text-[clamp(2rem,1.5rem+2vw,3.25rem)] font-bold uppercase leading-[1.05] tracking-tight mb-7 text-[color:var(--uq-color-neutral-0)]">
             Formülden
             <br />
             bildirime,
             <br />
-            <span className="text-sidebar-primary">tek çözüm.</span>
+            <span className="text-[color:var(--uq-color-signal-blue-100)]">
+              tek çözüm.
+            </span>
           </h1>
 
           {/* Alt açıklama */}
-          <p className="text-sidebar-muted text-base leading-relaxed max-w-md mb-10">
+          <p className="text-base leading-relaxed max-w-md mb-10 text-[color:var(--uq-color-graphite-plum-600)]">
             Kozmetik test ve analiz süreçlerinizi UNIQUE müşteri portalı ile
             tek bir ekrandan yönetin. Talepleriniz, raporlarınız, teklifleriniz
             ve cari hesabınız anlık erişiminizde.
           </p>
 
           {/* Alt etiket */}
-          <div className="flex items-center gap-3 text-[11px] uppercase tracking-[0.16em] text-sidebar-muted">
-            <span className="size-1.5 bg-sidebar-primary" />
+          <div className="flex items-center gap-3 text-[11px] uppercase tracking-[0.16em] text-[color:var(--uq-color-graphite-plum-600)]">
+            <span className="size-1.5 bg-[color:var(--uq-color-signal-blue-100)]" />
             <span>Powered by UNIQUE Test &amp; Compliance Protocol</span>
           </div>
         </div>
       </div>
 
-      {/* Sağ panel — login formu */}
+      {/* Sağ panel — açık zemin, login formu */}
       <div className="flex items-center justify-center p-6 sm:p-12 bg-background">
         <div className="w-full max-w-sm">
           <div className="lg:hidden mb-10">

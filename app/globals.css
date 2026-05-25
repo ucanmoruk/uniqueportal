@@ -465,4 +465,22 @@
     font-size: var(--uq-type-app-data-font-size);
     font-weight: var(--uq-type-app-data-font-weight);
   }
+
+}
+
+/* ---------- Hero-dark scope (login sol paneli) ----------
+   Scope içindeki UNIQUE semantic token referansları koyu palete
+   dönüşür. Yalnız login sayfasında kullanılır.
+   @layer dışında — Tailwind v4'te utility'lerden sonra evaluate ettirmek için. */
+.uq-hero-dark {
+  background-color: var(--uq-color-graphite-plum-200);
+  color: var(--uq-color-graphite-plum-700);
+
+  --uq-color-surface-primary: var(--uq-color-graphite-plum-200);
+  --uq-color-surface-secondary: var(--uq-color-graphite-plum-300);
+  --uq-color-text-primary: var(--uq-color-graphite-plum-700);
+  --uq-color-text-secondary: var(--uq-color-graphite-plum-600);
+  --uq-color-text-tertiary: var(--uq-color-graphite-plum-500);
+  --uq-color-border-default: var(--uq-color-graphite-plum-400);
+  --uq-color-border-subtle: var(--uq-color-graphite-plum-300);
 }
