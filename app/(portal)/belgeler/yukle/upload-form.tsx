@@ -20,6 +20,7 @@ import { FirmaCombobox } from "@/components/firma-combobox";
 import type { FirmaOption } from "@/lib/repositories/firma";
 import {
   uploadBelgelerAction,
+  notifyRaporlarAction,
   type UploadItemInput,
   type UploadState,
 } from "./actions";
@@ -56,6 +57,14 @@ export function UploadForm({ firmalar }: { firmalar: FirmaOption[] }) {
   const [dragOver, setDragOver] = React.useState(false);
   const fileInputRef = React.useRef<HTMLInputElement>(null);
 
+  // Bildirim modal state
+  const [pendingNotify, setPendingNotify] = React.useState<{
+    raporIds: number[];
+    firmaCount: number;
+    count: number;
+  } | null>(null);
+  const [notifySending, setNotifySending] = React.useState(false);
+
   const submitAction = async (
     prev: UploadState,
     _formData: FormData
@@ -74,13 +83,46 @@ export function UploadForm({ firmalar }: { firmalar: FirmaOption[] }) {
   const [state, formAction, pending] = useActionState(submitAction, initial);
 
   useEffect(() => {
-    if (state.ok) {
+    if (state.ok && state.raporIds && state.raporIds.length > 0) {
       toast.success(state.message ?? "Kaydedildi.");
       setRows([]);
+      // Bildirim modal'ı aç
+      setPendingNotify({
+        raporIds: state.raporIds,
+        firmaCount: state.firmaCount ?? 0,
+        count: state.count ?? 0,
+      });
     } else if (state.error) {
       toast.error(state.error);
     }
   }, [state]);
+
+  async function handleNotifyYes() {
+    if (!pendingNotify) return;
+    setNotifySending(true);
+    try {
+      const res = await notifyRaporlarAction(pendingNotify.raporIds);
+      if (res.error) {
+        toast.error(res.error);
+      } else {
+        const msg =
+          res.sent && res.sent > 0
+            ? `${res.sent} firmaya mail gönderildi${res.skipped ? ` · ${res.skipped} atlandı` : ""}`
+            : `Mail gönderimi yapılamadı (mail adresi tanımlı firma bulunamadı)`;
+        if (res.sent && res.sent > 0) toast.success(msg);
+        else toast(msg);
+      }
+    } catch (err) {
+      toast.error("Mail gönderilemedi: " + (err as Error).message);
+    } finally {
+      setNotifySending(false);
+      setPendingNotify(null);
+    }
+  }
+
+  function handleNotifyNo() {
+    setPendingNotify(null);
+  }
 
   function handleFiles(files: FileList | File[]) {
     const arr = Array.from(files);
@@ -307,6 +349,78 @@ export function UploadForm({ firmalar }: { firmalar: FirmaOption[] }) {
           </div>
         </div>
       )}
+
+      {/* --- Bildirim onay modal --- */}
+      {pendingNotify && (
+        <NotifyModal
+          count={pendingNotify.count}
+          firmaCount={pendingNotify.firmaCount}
+          sending={notifySending}
+          onYes={handleNotifyYes}
+          onNo={handleNotifyNo}
+        />
+      )}
     </form>
+  );
+}
+
+function NotifyModal({
+  count,
+  firmaCount,
+  sending,
+  onYes,
+  onNo,
+}: {
+  count: number;
+  firmaCount: number;
+  sending: boolean;
+  onYes: () => void;
+  onNo: () => void;
+}) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-foreground/40 backdrop-blur-sm">
+      <div className="w-full max-w-md bg-card border shadow-xl">
+        <div className="px-6 py-4 border-b">
+          <h3 className="text-base font-semibold tracking-tight">
+            Mail bildirimi gönderilsin mi?
+          </h3>
+        </div>
+        <div className="px-6 py-5 text-sm leading-relaxed">
+          <p>
+            <strong>{count}</strong> belge başarıyla kaydedildi
+            {firmaCount > 0 && (
+              <>
+                {" "}
+                ({firmaCount} firma).
+              </>
+            )}
+          </p>
+          <p className="mt-3 text-muted-foreground">
+            İlgili firmalara e-posta yoluyla bildirim göndermek ister misiniz?
+            Her firmaya tek bir özet mail iletilir, mail adresi tanımlı olmayan
+            firmalar atlanır.
+          </p>
+        </div>
+        <div className="px-6 py-4 border-t flex items-center justify-end gap-2">
+          <Button
+            type="button"
+            variant="ghost"
+            onClick={onNo}
+            disabled={sending}
+          >
+            Hayır, atla
+          </Button>
+          <Button type="button" onClick={onYes} disabled={sending}>
+            {sending ? (
+              <>
+                <Loader2 className="animate-spin" /> Gönderiliyor…
+              </>
+            ) : (
+              <>Evet, mail gönder</>
+            )}
+          </Button>
+        </div>
+      </div>
+    </div>
   );
 }
