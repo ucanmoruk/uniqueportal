@@ -28,6 +28,7 @@ async function getTransporter(): Promise<nodemailer.Transporter | null> {
 
 export interface EmailParams {
   to: string;
+  cc?: string;
   subject: string;
   html: string;
 }
@@ -43,6 +44,7 @@ export interface EmailResult {
  */
 export async function sendEmail({
   to,
+  cc,
   subject,
   html,
 }: EmailParams): Promise<EmailResult> {
@@ -63,6 +65,7 @@ export async function sendEmail({
     const info = await transporter.sendMail({
       from: fromHeader,
       to,
+      cc: cc && cc.trim() ? cc : undefined,
       subject,
       html,
     });
@@ -71,6 +74,23 @@ export async function sendEmail({
     console.error("[email] gönderim hatası:", err);
     return { sent: false, reason: (err as Error).message };
   }
+}
+
+/**
+ * Maile özel not enjekte eder. Layout'taki <!--UNIQUE_MAIL_NOTE--> marker'ı
+ * stilize bir alıntı bloğuyla değiştirir. Boş not için işaretçi temizlenir.
+ */
+export function injectNote(html: string, note: string | undefined | null): string {
+  if (!note || !note.trim()) {
+    return html.replace("<!--UNIQUE_MAIL_NOTE-->", "");
+  }
+  const safe = note
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/\n/g, "<br/>");
+  const block = `<div style="margin:0 0 20px;padding:12px 16px;background:#f8f9ff;border-left:3px solid #463aed;font-size:14px;color:#161519;font-style:italic;">${safe}</div>`;
+  return html.replace("<!--UNIQUE_MAIL_NOTE-->", block);
 }
 
 /** SMTP bağlantısı test eder (verify). */
@@ -116,6 +136,7 @@ ${opts.preheader ? `<div style="display:none;max-height:0;overflow:hidden;opacit
       </td></tr>
       <tr><td style="padding:32px;">
         <h1 style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:22px;line-height:1.2;margin:0 0 16px;color:#161519;letter-spacing:-0.02em;">${opts.title}</h1>
+        <!--UNIQUE_MAIL_NOTE-->
         <div style="font-size:15px;line-height:1.6;color:#161519;">${opts.bodyHtml}</div>
         ${cta}
       </td></tr>

@@ -4,6 +4,7 @@ import { requireAdmin } from "@/lib/auth";
 import { queryOne } from "@/lib/db";
 import {
   sendEmail,
+  injectNote,
   raporYuklendiTemplate,
   teklifOlusturulduTemplate,
   faturaOlusturulduTemplate,
@@ -12,20 +13,27 @@ import {
 
 export type MailKayitTuru = "rapor" | "teklif" | "fatura" | "destek";
 
-export interface MailNotifyState {
-  ok?: boolean;
-  message?: string;
+export interface MailDraft {
+  to: string;
+  subject: string;
+  bodyHtml: string;
+  firmaAdi: string;
+  kayitOzeti: string;   // ör: "T-188 · Fiyat teklifimiz"
+}
+
+export interface MailDraftResult {
+  draft?: MailDraft;
   error?: string;
 }
 
 /**
- * Tek bir kayıt için müşteriye mail at.
- * Type'a göre uygun template + Firma bilgisi çekilir.
+ * Bir kayıt için mail draft'ı hazırlar — gönderilmeden önce admin
+ * üzerinde düzenleyebilir.
  */
-export async function notifyKayitMailAction(
+export async function loadMailDraftAction(
   tur: MailKayitTuru,
   id: number
-): Promise<MailNotifyState> {
+): Promise<MailDraftResult> {
   try {
     await requireAdmin();
   } catch {
@@ -36,10 +44,11 @@ export async function notifyKayitMailAction(
     return { error: "Geçersiz kayıt ID'si." };
   }
 
-  let to: string | null = null;
+  let to = "";
   let firmaAdi = "Müşterimiz";
   let subject = "";
   let html = "";
+  let ozet = "";
 
   if (tur === "rapor") {
     const r = await queryOne<{
@@ -56,7 +65,7 @@ export async function notifyKayitMailAction(
       { id }
     );
     if (!r) return { error: "Rapor bulunamadı." };
-    to = r.Mail;
+    to = r.Mail ?? "";
     firmaAdi = r.Firma_Adi ?? firmaAdi;
     const tpl = raporYuklendiTemplate({
       firmaAdi,
@@ -65,6 +74,7 @@ export async function notifyKayitMailAction(
     });
     subject = tpl.subject;
     html = tpl.html;
+    ozet = `${r.RaporID ?? `R-${r.RaporNo ?? r.ID}`} · ${r.NumuneAd ?? ""}`;
   } else if (tur === "teklif") {
     const t = await queryOne<{
       ID: number;
@@ -79,7 +89,7 @@ export async function notifyKayitMailAction(
       { id }
     );
     if (!t) return { error: "Teklif bulunamadı." };
-    to = t.Mail;
+    to = t.Mail ?? "";
     firmaAdi = t.Firma_Adi ?? firmaAdi;
     const tpl = teklifOlusturulduTemplate({
       firmaAdi,
@@ -88,6 +98,7 @@ export async function notifyKayitMailAction(
     });
     subject = tpl.subject;
     html = tpl.html;
+    ozet = `T-${t.TeklifNo}${t.Aciklama ? " · " + t.Aciklama : ""}`;
   } else if (tur === "fatura") {
     const fa = await queryOne<{
       ID: number;
@@ -102,7 +113,7 @@ export async function notifyKayitMailAction(
       { id }
     );
     if (!fa) return { error: "Fatura bulunamadı." };
-    to = fa.Mail;
+    to = fa.Mail ?? "";
     firmaAdi = fa.Firma_Adi ?? firmaAdi;
     const tpl = faturaOlusturulduTemplate({
       firmaAdi,
@@ -111,8 +122,8 @@ export async function notifyKayitMailAction(
     });
     subject = tpl.subject;
     html = tpl.html;
+    ozet = `${fa.Fatura_No}${fa.Toplam ? " · " + fa.Toplam.toLocaleString("tr-TR") + " ₺" : ""}`;
   } else if (tur === "destek") {
-    // id = TalepID (DESTEK.TalepID)
     const d = await queryOne<{
       TalepID: number;
       BASLIK: string | null;
@@ -130,7 +141,7 @@ export async function notifyKayitMailAction(
       { id }
     );
     if (!d) return { error: "Destek talebi bulunamadı." };
-    to = d.Mail;
+    to = d.Mail ?? "";
     firmaAdi = d.Firma_Adi ?? firmaAdi;
     const tpl = destekYanitTemplate({
       firmaAdi,
@@ -140,19 +151,85 @@ export async function notifyKayitMailAction(
     });
     subject = tpl.subject;
     html = tpl.html;
+    ozet = d.BASLIK ?? "Destek talebi";
   } else {
     return { error: "Bilinmeyen kayıt türü." };
   }
 
-  if (!to || to.length < 3) {
-    return {
-      error: `${firmaAdi} firmasının e-posta adresi tanımlı değil. Hesabım > Mail alanına ekleyin.`,
-    };
+  return {
+    draft: {
+      to,
+      subject,
+      bodyHtml: html,
+      firmaAdi,
+      kayitOzeti: ozet,
+    },
+  };
+}
+
+export interface SendCustomMailInput {
+  to: string;
+  cc?: string;
+  subject: string;
+  bodyHtml: string;
+  note?: string;
+}
+
+export interface SendCustomMailResult {
+  ok?: boolean;
+  message?: string;
+  error?: string;
+}
+
+/**
+ * Düzenlenmiş mail içeriğini gönderir.
+ * - to: virgülle ayrılmış birden fazla adres olabilir
+ * - cc: opsiyonel
+ * - note: bodyHtml içindeki <!--UNIQUE_MAIL_NOTE--> markerına enjekte edilir
+ */
+export async function sendCustomMailAction(
+  input: SendCustomMailInput
+): Promise<SendCustomMailResult> {
+  try {
+    await requireAdmin();
+  } catch {
+    return { error: "Yetkisiz işlem." };
   }
 
-  const res = await sendEmail({ to, subject, html });
+  const to = input.to?.trim();
+  if (!to) return { error: "En az bir alıcı e-postası girin." };
+  if (!input.subject?.trim()) return { error: "Konu boş olamaz." };
+
+  // Basit e-mail format doğrulaması (her adres)
+  const splitClean = (s: string) =>
+    s
+      .split(/[,;]/)
+      .map((p) => p.trim())
+      .filter(Boolean);
+  const toList = splitClean(to);
+  const ccList = input.cc ? splitClean(input.cc) : [];
+  const isEmail = (e: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e);
+  const allInvalid = [...toList, ...ccList].filter((e) => !isEmail(e));
+  if (allInvalid.length) {
+    return { error: `Geçersiz e-posta: ${allInvalid.slice(0, 3).join(", ")}` };
+  }
+
+  const finalHtml = injectNote(input.bodyHtml, input.note);
+
+  const res = await sendEmail({
+    to: toList.join(", "),
+    cc: ccList.length ? ccList.join(", ") : undefined,
+    subject: input.subject,
+    html: finalHtml,
+  });
+
   if (!res.sent) {
     return { error: "Gönderim hatası: " + (res.reason ?? "bilinmiyor") };
   }
-  return { ok: true, message: `Mail ${to} adresine gönderildi.` };
+  return {
+    ok: true,
+    message: `Mail gönderildi → ${toList.join(", ")}${
+      ccList.length ? " (cc: " + ccList.join(", ") + ")" : ""
+    }`,
+  };
 }
