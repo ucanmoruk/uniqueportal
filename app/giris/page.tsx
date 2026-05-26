@@ -20,11 +20,6 @@ export default function LoginPage() {
           }}
         />
         <div className="relative z-10 px-16 max-w-2xl">
-          {/* Marka — koyu zemine doğal olarak yerleşen inverted variant */}
-          <div className="mb-12">
-            <UniqueLogo size="lg" inverted />
-          </div>
-
           {/* Eyebrow */}
           <div className="mb-6 text-[10px] font-semibold tracking-[0.18em] uppercase text-[color:var(--uq-color-signal-blue-100)]">
             ▸ Müşteri Portalı
@@ -56,10 +51,11 @@ export default function LoginPage() {
         </div>
       </div>
 
-      {/* Sağ panel — açık zemin, login formu */}
+      {/* Sağ panel — açık zemin, logo + login formu */}
       <div className="flex items-center justify-center p-6 sm:p-12 bg-background">
         <div className="w-full max-w-sm">
-          <div className="lg:hidden mb-10">
+          {/* Marka — orijinal JPEG, beyaz zemin üzerinde doğal görünür */}
+          <div className="mb-12">
             <UniqueLogo size="lg" />
           </div>
 
