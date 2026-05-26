@@ -20,10 +20,9 @@ export default function LoginPage() {
           }}
         />
         <div className="relative z-10 px-16 max-w-2xl">
-          {/* Marka — orijinal JPEG, koyu zeminde okunabilirlik için
-              beyaz bir "logo plakası" içinde */}
-          <div className="mb-14 inline-block bg-[color:var(--uq-color-neutral-0)] px-8 py-5">
-            <UniqueLogo size="2xl" />
+          {/* Marka — koyu zemine doğal olarak yerleşen inverted variant */}
+          <div className="mb-12">
+            <UniqueLogo size="lg" inverted />
           </div>
 
           {/* Eyebrow */}
