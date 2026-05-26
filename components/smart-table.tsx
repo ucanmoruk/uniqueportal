@@ -38,6 +38,10 @@ interface SmartTableProps<T> {
   emptyMessage?: string;
   toolbar?: React.ReactNode;
   rowHref?: (row: T) => string | undefined;
+  /** Çoklu seçim aktif edilirse satır başına checkbox kolonu eklenir. */
+  selectable?: boolean;
+  /** Seçim değiştiğinde tetiklenir. Seçili satırların tamamı (filtre öncesi). */
+  onSelectionChange?: (selectedRows: T[]) => void;
 }
 
 type SortDir = "asc" | "desc";
@@ -60,6 +64,8 @@ export function SmartTable<T extends object>({
   emptyMessage = "Kayıt bulunamadı.",
   toolbar,
   rowHref,
+  selectable = false,
+  onSelectionChange,
 }: SmartTableProps<T>) {
   const router = useRouter();
   const [search, setSearch] = React.useState("");
@@ -67,6 +73,9 @@ export function SmartTable<T extends object>({
   const [sortDir, setSortDir] = React.useState<SortDir>("asc");
   const [page, setPage] = React.useState(1);
   const [pageSize, setPageSize] = React.useState(initialPageSize);
+  const [selectedKeys, setSelectedKeys] = React.useState<Set<string | number>>(
+    () => new Set()
+  );
 
   React.useEffect(() => {
     setPage(1);
@@ -115,6 +124,52 @@ export function SmartTable<T extends object>({
       setSortDir("asc");
     }
   }
+
+  // Seçim helper'ları
+  const rowKeysAll = React.useMemo(
+    () => rows.map((r, i) => rowKey(r, i)),
+    [rows, rowKey]
+  );
+  const visibleKeys = React.useMemo(
+    () => sorted.map((r) => rowKeysAll[rows.indexOf(r)]),
+    [sorted, rowKeysAll, rows]
+  );
+  const allVisibleSelected =
+    visibleKeys.length > 0 && visibleKeys.every((k) => selectedKeys.has(k));
+  const someVisibleSelected =
+    !allVisibleSelected && visibleKeys.some((k) => selectedKeys.has(k));
+
+  function toggleRow(k: string | number) {
+    setSelectedKeys((prev) => {
+      const next = new Set(prev);
+      if (next.has(k)) next.delete(k);
+      else next.add(k);
+      return next;
+    });
+  }
+
+  function toggleAllVisible() {
+    setSelectedKeys((prev) => {
+      const next = new Set(prev);
+      if (allVisibleSelected) {
+        visibleKeys.forEach((k) => next.delete(k));
+      } else {
+        visibleKeys.forEach((k) => next.add(k));
+      }
+      return next;
+    });
+  }
+
+  // Selection değişimini parent'a haber ver
+  React.useEffect(() => {
+    if (!onSelectionChange) return;
+    const selectedRows = rows.filter((r, i) =>
+      selectedKeys.has(rowKey(r, i))
+    );
+    onSelectionChange(selectedRows);
+    // selectedKeys değişimi yeterli — rows referansı stable kabul ediliyor
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedKeys]);
 
   return (
     <div className="rounded-lg border bg-card text-card-foreground overflow-hidden shadow-sm">
@@ -169,6 +224,20 @@ export function SmartTable<T extends object>({
         <table className="w-full text-sm">
           <thead className="bg-muted/20 text-muted-foreground border-b">
             <tr className="text-left">
+              {selectable && (
+                <th className="px-3 py-2.5 w-8">
+                  <input
+                    type="checkbox"
+                    aria-label="Tümünü seç"
+                    checked={allVisibleSelected}
+                    ref={(el) => {
+                      if (el) el.indeterminate = someVisibleSelected;
+                    }}
+                    onChange={toggleAllVisible}
+                    className="size-4"
+                  />
+                </th>
+              )}
               {columns.map((c) => {
                 const sortable = c.sortable !== false && !!c.accessor;
                 const isSorted = sortKey === c.key;
@@ -212,7 +281,7 @@ export function SmartTable<T extends object>({
             {pageRows.length === 0 ? (
               <tr>
                 <td
-                  colSpan={columns.length}
+                  colSpan={columns.length + (selectable ? 1 : 0)}
                   className="px-4 py-16 text-center text-muted-foreground"
                 >
                   {search ? (
@@ -238,11 +307,14 @@ export function SmartTable<T extends object>({
             ) : (
               pageRows.map((row, idx) => {
                 const href = rowHref?.(row);
+                const key = rowKey(row, start + idx);
+                const isSelected = selectable && selectedKeys.has(key);
                 return (
                   <tr
-                    key={rowKey(row, start + idx)}
+                    key={key}
                     className={cn(
                       "border-b last:border-b-0 transition-colors",
+                      isSelected && "bg-primary-subtle/30",
                       href
                         ? "hover:bg-accent/40 cursor-pointer"
                         : "hover:bg-accent/20"
@@ -252,7 +324,7 @@ export function SmartTable<T extends object>({
                         ? (e) => {
                             const target = e.target as HTMLElement;
                             if (
-                              target.closest("a,button,input,select,textarea")
+                              target.closest("a,button,input,select,textarea,label")
                             )
                               return;
                             router.push(href);
@@ -260,6 +332,20 @@ export function SmartTable<T extends object>({
                         : undefined
                     }
                   >
+                    {selectable && (
+                      <td
+                        className="px-3 py-3 w-8"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <input
+                          type="checkbox"
+                          aria-label="Satırı seç"
+                          checked={selectedKeys.has(key)}
+                          onChange={() => toggleRow(key)}
+                          className="size-4"
+                        />
+                      </td>
+                    )}
                     {columns.map((c) => {
                       const val = c.cell
                         ? c.cell(row)

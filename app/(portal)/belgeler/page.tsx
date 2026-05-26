@@ -16,7 +16,11 @@ export default async function BelgelerPage() {
         title="Belgelerim"
         description={`Toplam ${rows.length} aktif rapor. Görüntüle butonuna tıklayarak PDF'i yeni sekmede açabilirsiniz.`}
       />
-      <BelgelerTable rows={rows} showProje={isAdmin(user)} />
+      <BelgelerTable
+        rows={rows}
+        showProje={isAdmin(user)}
+        isAdmin={isAdmin(user)}
+      />
     </>
   );
 }

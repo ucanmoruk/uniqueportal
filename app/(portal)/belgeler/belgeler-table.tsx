@@ -1,17 +1,25 @@
 "use client";
 
+import * as React from "react";
 import { SmartTable, type SmartColumn } from "@/components/smart-table";
 import { formatDate } from "@/lib/utils";
-import { Eye, FileText } from "lucide-react";
+import { Eye, FileText, Mail } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { BulkMailModal } from "./bulk-mail-modal";
 import type { RaporListItem } from "@/lib/repositories/rapor";
 
 export function BelgelerTable({
   rows,
   showProje = false,
+  isAdmin = false,
 }: {
   rows: RaporListItem[];
   showProje?: boolean;
+  isAdmin?: boolean;
 }) {
+  const [selected, setSelected] = React.useState<RaporListItem[]>([]);
+  const [modalOpen, setModalOpen] = React.useState(false);
+
   const columns: SmartColumn<RaporListItem>[] = [
     {
       key: "no",
@@ -85,7 +93,7 @@ export function BelgelerTable({
           href={`/api/belge/${r.ID}`}
           target="_blank"
           rel="noopener noreferrer"
-          className="inline-flex items-center gap-1 rounded-md border bg-background px-2.5 py-1 text-xs font-medium hover:bg-accent hover:text-accent-foreground"
+          className="inline-flex items-center gap-1 border bg-background px-2.5 py-1 text-xs font-medium hover:bg-accent hover:text-accent-foreground"
         >
           <Eye className="size-3.5" /> Görüntüle
         </a>
@@ -94,12 +102,52 @@ export function BelgelerTable({
   ];
 
   return (
-    <SmartTable
-      rows={rows}
-      columns={columns}
-      rowKey={(r, idx) => `${r.ID}-${idx}`}
-      searchPlaceholder="Belge no, müşteri, dosya adı…"
-      emptyMessage="Henüz belge yok."
-    />
+    <div className="space-y-3">
+      {isAdmin && selected.length > 0 && (
+        <div className="border bg-primary-subtle/30 border-primary/30 px-4 py-3 flex items-center justify-between gap-3">
+          <div className="text-sm">
+            <strong>{selected.length}</strong> belge seçildi
+          </div>
+          <div className="flex items-center gap-2">
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => setSelected([])}
+            >
+              Seçimi Temizle
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              onClick={() => setModalOpen(true)}
+            >
+              <Mail className="size-4" /> Mail Oluştur
+            </Button>
+          </div>
+        </div>
+      )}
+
+      <SmartTable
+        rows={rows}
+        columns={columns}
+        rowKey={(r, idx) => `${r.ID}-${idx}`}
+        searchPlaceholder="Belge no, müşteri, dosya adı…"
+        emptyMessage="Henüz belge yok."
+        selectable={isAdmin}
+        onSelectionChange={setSelected}
+      />
+
+      {modalOpen && (
+        <BulkMailModal
+          raporIds={selected.map((r) => r.ID)}
+          onClose={() => setModalOpen(false)}
+          onSuccess={() => {
+            setModalOpen(false);
+            setSelected([]);
+          }}
+        />
+      )}
+    </div>
   );
 }
