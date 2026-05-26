@@ -12,6 +12,8 @@ import { Button } from "@/components/ui/button";
 import { formatDate } from "@/lib/utils";
 import { ArrowLeft, Printer } from "lucide-react";
 import { findFirmaById } from "@/lib/repositories/firma";
+import { MailNotifyButton } from "@/components/mail-notify-button";
+import { isAdmin } from "@/lib/permissions";
 
 export const dynamic = "force-dynamic";
 
@@ -62,6 +64,7 @@ export default async function TeklifDetailPage({
                 <Printer className="size-4" /> Yazdır
               </Link>
             </Button>
+            {isAdmin(user) && <MailNotifyButton tur="teklif" id={numId} />}
             <StatusBadge value={baslik.TeklifDurum} />
           </>
         }

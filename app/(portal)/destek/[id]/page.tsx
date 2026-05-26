@@ -8,6 +8,8 @@ import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/ui/badge";
 import { ArrowLeft } from "lucide-react";
 import { MesajForm } from "./mesaj-form";
+import { MailNotifyButton } from "@/components/mail-notify-button";
+import { isAdmin } from "@/lib/permissions";
 
 export const dynamic = "force-dynamic";
 
@@ -54,6 +56,13 @@ export default async function DestekDetayPage({
                 <ArrowLeft className="size-4" /> Listeye dön
               </Link>
             </Button>
+            {isAdmin(user) && (
+              <MailNotifyButton
+                tur="destek"
+                id={header.TalepID}
+                label="Yanıtı Mail At"
+              />
+            )}
             <StatusBadge value={header.Durum} />
           </>
         }

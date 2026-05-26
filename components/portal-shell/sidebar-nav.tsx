@@ -16,6 +16,7 @@ import {
   Menu,
   X,
   LogOut,
+  Mail,
 } from "lucide-react";
 import { UniqueLogo } from "@/components/unique-logo";
 import { cn } from "@/lib/utils";
@@ -40,6 +41,7 @@ const NAV: NavItem[] = [
   { href: "/termin", label: "Termin Takibi", icon: Clock, group: "İşlemler" },
   { href: "/belgeler", label: "Belgelerim", icon: FileCheck, group: "İşlemler" },
   { href: "/belgeler/yukle", label: "Belge Yükle", icon: Upload, group: "Yönetim", adminOnly: true },
+  { href: "/ayarlar/email", label: "Mail Ayarları", icon: Mail, group: "Yönetim", adminOnly: true },
   { href: "/destek", label: "Destek Talepleri", icon: LifeBuoy, group: "Yardım" },
   { href: "/hesabim", label: "Hesabım", icon: User, group: "Hesap" },
 ];

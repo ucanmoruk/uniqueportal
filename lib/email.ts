@@ -1,13 +1,29 @@
-import { Resend } from "resend";
+import nodemailer from "nodemailer";
+import { getEmailAyar } from "@/lib/repositories/email-ayar";
 
-let __resend: Resend | null = null;
+let __transporter: nodemailer.Transporter | null = null;
+let __cachedSettings: string | null = null;
 
-function getResend(): Resend | null {
-  if (__resend) return __resend;
-  const key = process.env.RESEND_API_KEY;
-  if (!key) return null;
-  __resend = new Resend(key);
-  return __resend;
+async function getTransporter(): Promise<nodemailer.Transporter | null> {
+  const ayar = await getEmailAyar();
+  if (!ayar || !ayar.Aktif || !ayar.Host || !ayar.FromEmail) return null;
+
+  const fingerprint = `${ayar.Host}|${ayar.Port}|${ayar.Secure}|${ayar.Username}|${ayar.Sifre}`;
+  if (__transporter && __cachedSettings === fingerprint) return __transporter;
+
+  __transporter = nodemailer.createTransport({
+    host: ayar.Host,
+    port: ayar.Port,
+    secure: ayar.Secure,
+    auth: ayar.Username
+      ? {
+          user: ayar.Username,
+          pass: ayar.Sifre,
+        }
+      : undefined,
+  });
+  __cachedSettings = fingerprint;
+  return __transporter;
 }
 
 export interface EmailParams {
@@ -16,41 +32,63 @@ export interface EmailParams {
   html: string;
 }
 
+export interface EmailResult {
+  sent: boolean;
+  reason?: string;
+  id?: string;
+}
+
 /**
- * Resend ile e-posta gönderir. RESEND_API_KEY ayarlı değilse no-op.
- * Dönen değer: { sent: boolean, reason?: string }
+ * E-posta gönderir. EmailAyar tablosunda yapılandırma yoksa no-op döner.
  */
 export async function sendEmail({
   to,
   subject,
   html,
-}: EmailParams): Promise<{ sent: boolean; reason?: string; id?: string }> {
-  const resend = getResend();
-  if (!resend) {
-    return { sent: false, reason: "RESEND_API_KEY ayarlı değil" };
+}: EmailParams): Promise<EmailResult> {
+  const transporter = await getTransporter();
+  const ayar = await getEmailAyar();
+  if (!transporter || !ayar) {
+    return {
+      sent: false,
+      reason: "SMTP yapılandırılmadı (Ayarlar > Mail Ayarları)",
+    };
   }
 
-  const from = process.env.EMAIL_FROM ?? "UNIQUE Portal <noreply@resend.dev>";
+  const fromHeader = ayar.FromName
+    ? `"${ayar.FromName}" <${ayar.FromEmail}>`
+    : ayar.FromEmail;
 
   try {
-    const { data, error } = await resend.emails.send({
-      from,
-      to: [to],
+    const info = await transporter.sendMail({
+      from: fromHeader,
+      to,
       subject,
       html,
     });
-    if (error) {
-      console.error("[email] gönderim hatası:", error);
-      return { sent: false, reason: error.message };
-    }
-    return { sent: true, id: data?.id };
+    return { sent: true, id: info.messageId };
   } catch (err) {
-    console.error("[email] beklenmeyen hata:", err);
+    console.error("[email] gönderim hatası:", err);
     return { sent: false, reason: (err as Error).message };
   }
 }
 
-/** Basit HTML email layout */
+/** SMTP bağlantısı test eder (verify). */
+export async function verifyEmailConfig(): Promise<EmailResult> {
+  const transporter = await getTransporter();
+  if (!transporter) {
+    return { sent: false, reason: "SMTP yapılandırılmadı." };
+  }
+  try {
+    await transporter.verify();
+    return { sent: true };
+  } catch (err) {
+    return { sent: false, reason: (err as Error).message };
+  }
+}
+
+// ---- Email layout + templates --------------------------------------------
+
 export function emailLayout(opts: {
   title: string;
   preheader?: string;
@@ -59,7 +97,7 @@ export function emailLayout(opts: {
   ctaUrl?: string;
   footerNote?: string;
 }): string {
-  const base = process.env.AUTH_URL ?? "https://portal";
+  const base = process.env.AUTH_URL ?? "";
   const cta =
     opts.ctaUrl && opts.ctaLabel
       ? `<a href="${opts.ctaUrl}" style="display:inline-block;background:#463aed;color:#fff;padding:12px 24px;text-decoration:none;font-weight:600;font-family:'JetBrains Mono',monospace;text-transform:uppercase;letter-spacing:0.08em;font-size:13px;margin-top:24px;">${opts.ctaLabel}</a>`
@@ -73,7 +111,7 @@ ${opts.preheader ? `<div style="display:none;max-height:0;overflow:hidden;opacit
   <tr><td align="center">
     <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="600" style="max-width:600px;background:#ffffff;border:1px solid #e5e5ea;">
       <tr><td style="padding:24px 32px;border-bottom:1px solid #e5e5ea;">
-        <div style="font-family:'JetBrains Mono',ui-monospace,monospace;font-weight:700;font-size:14px;color:#161519;">UNIQUE</div>
+        <div style="font-family:'JetBrains Mono',ui-monospace,monospace;font-weight:700;font-size:14px;color:#161519;">UNIQUE <span style="color:#463aed;">ANALYSE</span></div>
         <div style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:10px;letter-spacing:0.16em;text-transform:uppercase;color:#585866;">Services Portal</div>
       </td></tr>
       <tr><td style="padding:32px;">
@@ -82,8 +120,8 @@ ${opts.preheader ? `<div style="display:none;max-height:0;overflow:hidden;opacit
         ${cta}
       </td></tr>
       <tr><td style="padding:20px 32px;border-top:1px solid #e5e5ea;background:#fafafa;font-size:12px;color:#585866;">
-        ${opts.footerNote ?? "Bu mesaj UNIQUE Services Portal tarafından otomatik gönderilmiştir."}
-        <div style="margin-top:8px;"><a href="${base}" style="color:#463aed;text-decoration:none;">${base.replace(/^https?:\/\//, "")}</a></div>
+        ${opts.footerNote ?? "Bu mesaj UNIQUE Services Portal tarafından gönderilmiştir."}
+        ${base ? `<div style="margin-top:8px;"><a href="${base}" style="color:#463aed;text-decoration:none;">${base.replace(/^https?:\/\//, "")}</a></div>` : ""}
       </td></tr>
     </table>
   </td></tr>
@@ -91,8 +129,7 @@ ${opts.preheader ? `<div style="display:none;max-height:0;overflow:hidden;opacit
 </body></html>`;
 }
 
-// ---- Hazır şablonlar -----------------------------------------------------
-
+// Template'ler
 export interface RaporMailData {
   firmaAdi: string;
   raporAdi: string;
@@ -209,13 +246,13 @@ export function destekYanitTemplate(d: DestekYanitMailData) {
   };
 }
 
-// ---- Digest (toplu özet) -------------------------------------------------
+// ---- Digest (toplu özet) --------------------------------------------------
 
 export interface DigestItem {
   type: "rapor" | "teklif" | "fatura" | "destek-yanit";
-  baslik: string;       // ana satır (ör. "ASETON - 26260547")
-  altBaslik?: string;   // küçük satır (rapor no, teklif no, tutar)
-  link?: string;        // CTA için (ilk öğenin linki kullanılır)
+  baslik: string;
+  altBaslik?: string;
+  link?: string;
 }
 
 export interface DigestMailData {
@@ -229,7 +266,7 @@ export interface DigestMailData {
 function digestSection(title: string, items: DigestItem[]): string {
   if (items.length === 0) return "";
   const rows = items
-    .slice(0, 20) // ilk 20 öğeyi göster, fazlasını sayı olarak yaz
+    .slice(0, 20)
     .map(
       (it) => `
       <tr>

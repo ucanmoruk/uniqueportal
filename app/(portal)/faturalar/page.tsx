@@ -36,7 +36,11 @@ export default async function FaturalarPage() {
         />
       </div>
 
-      <FaturalarTable rows={rows} showProje={isAdmin(user)} />
+      <FaturalarTable
+        rows={rows}
+        showProje={isAdmin(user)}
+        isAdmin={isAdmin(user)}
+      />
     </>
   );
 }

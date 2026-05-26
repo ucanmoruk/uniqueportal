@@ -3,14 +3,17 @@
 import { SmartTable, type SmartColumn } from "@/components/smart-table";
 import { StatusBadge } from "@/components/ui/badge";
 import { formatDate, formatTL } from "@/lib/utils";
+import { MailNotifyButton } from "@/components/mail-notify-button";
 import type { FaturaListItem } from "@/lib/repositories/fatura";
 
 export function FaturalarTable({
   rows,
   showProje = false,
+  isAdmin = false,
 }: {
   rows: FaturaListItem[];
   showProje?: boolean;
+  isAdmin?: boolean;
 }) {
   const columns: SmartColumn<FaturaListItem>[] = [
     {
@@ -85,6 +88,18 @@ export function FaturalarTable({
       accessor: (r) => r["Ödeme"],
       cell: (r) => <StatusBadge value={r["Ödeme"]} />,
     },
+    ...(isAdmin
+      ? ([
+          {
+            key: "mail",
+            header: "",
+            sortable: false,
+            searchable: false,
+            align: "right",
+            cell: (r) => <MailNotifyButton tur="fatura" id={r.ID} label="Mail" />,
+          },
+        ] satisfies SmartColumn<FaturaListItem>[])
+      : []),
   ];
 
   return (
