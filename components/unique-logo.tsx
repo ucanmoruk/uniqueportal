@@ -14,7 +14,7 @@ import { cn } from "@/lib/utils";
  */
 
 interface UniqueLogoProps extends React.HTMLAttributes<HTMLDivElement> {
-  size?: "sm" | "md" | "lg" | "xl";
+  size?: "sm" | "md" | "lg" | "xl" | "2xl";
   wordmark?: "full" | "icon" | "wordmark";
   /** Koyu zeminde kullanılacaksa: beyaz UNIQUE + açık indigo ANALYSE. */
   inverted?: boolean;
@@ -26,10 +26,13 @@ const SIZE_MAP: Record<NonNullable<UniqueLogoProps["size"]>, {
   text: string;
   gap: string;
 }> = {
-  sm: { height: "h-6",  iconBox: "size-6",  text: "text-sm",   gap: "gap-2" },
-  md: { height: "h-8",  iconBox: "size-8",  text: "text-base", gap: "gap-2.5" },
-  lg: { height: "h-10", iconBox: "size-10", text: "text-xl",   gap: "gap-3" },
-  xl: { height: "h-14", iconBox: "size-14", text: "text-3xl",  gap: "gap-4" },
+  // spacing-6 = 24, spacing-8 = 32, spacing-10 = 40, spacing-12 = 48,
+  // spacing-16 = 64, spacing-20 = 80 (UNIQUE token scale)
+  sm:    { height: "h-6",  iconBox: "size-6",  text: "text-sm",   gap: "gap-2" },
+  md:    { height: "h-8",  iconBox: "size-8",  text: "text-base", gap: "gap-2.5" },
+  lg:    { height: "h-12", iconBox: "size-12", text: "text-xl",   gap: "gap-3" },
+  xl:    { height: "h-16", iconBox: "size-16", text: "text-3xl",  gap: "gap-4" },
+  "2xl": { height: "h-20", iconBox: "size-20", text: "text-4xl",  gap: "gap-4" },
 };
 
 export function UniqueLogo({
