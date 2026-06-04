@@ -79,14 +79,20 @@ export async function loadMailDraftAction(
   } else if (tur === "teklif") {
     const t = await queryOne<{
       ID: number;
-      TeklifNo: number;
-      Aciklama: string | null;
+      TeklifNoText: string;
+      Notlar: string | null;
       Firma_Adi: string | null;
       Mail: string | null;
     }>(
-      `SELECT t.ID, t.TeklifNo, t.Aciklama, f.Firma_Adi, f.Mail
-       FROM TeklifX1 t LEFT JOIN Firma f ON f.ID = t.FirmaID
-       WHERE t.ID = @id`,
+      `SELECT TOP 1
+          tb.ID,
+          COALESCE(tb.DisTeklifKodu, CONCAT('UQ', CAST(tb.TeklifNo AS varchar)))
+            + '/' + RIGHT('00' + CAST(tb.RevNo AS varchar), 2) AS TeklifNoText,
+          tb.Notlar,
+          f.Firma_Adi, f.Mail
+       FROM cosmoroot.TeklifBaslik tb
+       LEFT JOIN dbo.Firma f ON f.ID = tb.MusteriID
+       WHERE tb.ID = @id`,
       { id }
     );
     if (!t) return { error: "Teklif bulunamadı." };
@@ -94,12 +100,12 @@ export async function loadMailDraftAction(
     firmaAdi = t.Firma_Adi ?? firmaAdi;
     const tpl = teklifOlusturulduTemplate({
       firmaAdi,
-      teklifNo: `T-${t.TeklifNo}`,
-      aciklama: t.Aciklama,
+      teklifNo: t.TeklifNoText,
+      aciklama: t.Notlar,
     });
     subject = tpl.subject;
     html = tpl.html;
-    ozet = `T-${t.TeklifNo}${t.Aciklama ? " · " + t.Aciklama : ""}`;
+    ozet = `${t.TeklifNoText}${t.Notlar ? " · " + t.Notlar : ""}`;
   } else if (tur === "fatura") {
     const fa = await queryOne<{
       ID: number;

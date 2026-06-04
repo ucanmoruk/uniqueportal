@@ -190,17 +190,24 @@ export async function listUserRelatedItems(
 
   const items: UserRelatedItem[] = [];
 
-  // Teklifler (son 50)
+  // Teklifler (son 50) — yeni TeklifBaslik tablosundan, taslak olanlar hariç.
   const teklifler = await query<{
     ID: number;
-    "Teklif No": string;
+    TeklifNoText: string;
     Tarih: Date | null;
-    Aciklama: string | null;
+    Notlar: string | null;
   }>(
-    `SELECT TOP 50 ID, [Teklif No], Tarih, Aciklama
-     FROM VIEW_TEKLIFLERIM
-     WHERE (FirmaID = @id OR ProjeID = @id)
-     ORDER BY Tarih DESC, ID DESC`,
+    `SELECT TOP 50
+        tb.ID,
+        COALESCE(tb.DisTeklifKodu, CONCAT('UQ', CAST(tb.TeklifNo AS varchar)))
+          + '/' + RIGHT('00' + CAST(tb.RevNo AS varchar), 2) AS TeklifNoText,
+        tb.Tarih,
+        tb.Notlar
+     FROM cosmoroot.TeklifBaslik tb
+     WHERE tb.MusteriID = @id
+       AND tb.Durum = 'Aktif'
+       AND (tb.TeklifDurum IS NULL OR tb.TeklifDurum NOT IN ('Taslak','Hazırlanıyor','Hazirlaniyor','Draft'))
+     ORDER BY tb.Tarih DESC, tb.ID DESC`,
     { id: user.id }
   ).catch(() => []);
 
@@ -208,8 +215,8 @@ export async function listUserRelatedItems(
     items.push({
       type: "Teklif",
       id: t.ID,
-      label: `${t["Teklif No"]}`,
-      subtitle: t.Aciklama ?? "",
+      label: t.TeklifNoText,
+      subtitle: t.Notlar ?? "",
     });
   }
 

@@ -45,9 +45,8 @@ interface RaporEvent {
 
 interface TeklifEvent {
   ID: number;
-  TeklifNo: number;
-  Aciklama: string | null;
-  ParaBirimi: string | null;
+  TeklifNoText: string;
+  TeklifKonusu: string | null;
   Tarih: Date;
 }
 
@@ -106,24 +105,36 @@ export async function getBildirimler(
     );
   }
 
-  // ---- Teklifler ----
+  // ---- Teklifler (yalnızca "gönderilmiş" olanlar — taslak gizli) ----
+  // Numara DisTeklifKodu/RevNo formatında üretilir.
+  const TEKLIF_BASE_SELECT = `
+    SELECT TOP 30
+      tb.ID,
+      COALESCE(tb.DisTeklifKodu, CONCAT('UQ', CAST(tb.TeklifNo AS varchar)))
+        + '/' + RIGHT('00' + CAST(tb.RevNo AS varchar), 2) AS TeklifNoText,
+      tb.TeklifKonusu,
+      tb.Tarih
+    FROM cosmoroot.TeklifBaslik tb`;
+  const TEKLIF_BASE_WHERE = `
+      tb.Durum = 'Aktif'
+      AND (tb.TeklifDurum IS NULL OR tb.TeklifDurum NOT IN ('Taslak','Hazırlanıyor','Hazirlaniyor','Draft'))
+      AND tb.Tarih >= @since`;
+
   let teklifRows: TeklifEvent[] = [];
   if (isAdmin(user)) {
     teklifRows = await query<TeklifEvent>(
-      `SELECT TOP 30 ID, TeklifNo, Aciklama, ParaBirimi, Tarih
-       FROM TeklifX1
-       WHERE Tarih >= @since
-       ORDER BY Tarih DESC, ID DESC`,
+      `${TEKLIF_BASE_SELECT}
+       WHERE ${TEKLIF_BASE_WHERE}
+       ORDER BY tb.Tarih DESC, tb.ID DESC`,
       { since }
     );
   } else {
-    // Müşteri/Proje: kendi firmasına ait (FirmaID)
+    // Müşteri/Proje: kendi firmasına kesilen teklifler.
     teklifRows = await query<TeklifEvent>(
-      `SELECT TOP 30 ID, TeklifNo, Aciklama, ParaBirimi, Tarih
-       FROM TeklifX1
-       WHERE Tarih >= @since
-         AND (FirmaID = @firmaId OR ProjeID = @firmaId)
-       ORDER BY Tarih DESC, ID DESC`,
+      `${TEKLIF_BASE_SELECT}
+       WHERE ${TEKLIF_BASE_WHERE}
+         AND tb.MusteriID = @firmaId
+       ORDER BY tb.Tarih DESC, tb.ID DESC`,
       { since, firmaId: user.id }
     );
   }
@@ -165,14 +176,13 @@ export async function getBildirimler(
   }
 
   for (const t of teklifRows) {
-    const para = t.ParaBirimi ? ` (${t.ParaBirimi})` : "";
     all.push({
       id: `teklif-${t.ID}`,
       type: "teklif",
-      title: `Yeni teklif oluşturuldu${para}`,
-      subtitle: t.Aciklama
-        ? `T-${t.TeklifNo} · ${t.Aciklama}`
-        : `T-${t.TeklifNo}`,
+      title: "Yeni bir teklifiniz var",
+      subtitle: t.TeklifKonusu
+        ? `${t.TeklifNoText} · ${t.TeklifKonusu}`
+        : t.TeklifNoText,
       link: `/teklifler/${t.ID}`,
       tarih: new Date(t.Tarih),
     });
