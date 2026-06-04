@@ -186,9 +186,9 @@ export function YeniTalepForm({
                 placeholder="Örn: Krem 100ml"
               />
               <Field
-                label="Özellik"
+                label="Seri/Lot No vb."
                 name={`numuneler[${idx}][Ozellik]`}
-                placeholder="Renk / forma"
+                placeholder="Seri / lot / parti no"
               />
               <Field
                 label="Analiz"

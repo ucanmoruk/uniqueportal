@@ -8,6 +8,7 @@ import { StatusBadge } from "@/components/ui/badge";
 import { formatDate } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft } from "lucide-react";
+import { IptalTalepButton } from "./iptal-button";
 
 export const dynamic = "force-dynamic";
 
@@ -28,10 +29,14 @@ export default async function TalepDetailPage({
 
   if (!talep) notFound();
 
+  // Görüntülenecek talep no — yeni format `ÜGAM/26/XXXX`, eski kayıtlar `UQ<no>`
+  const talepEtiket = talep.DisTalepKodu ?? `UQ${talep.TalepNo}`;
+  const iptalEdilebilir = talep.Durum === "Yeni Talep";
+
   return (
     <>
       <PageHeader
-        title={`Talep #${talep.TalepNo}`}
+        title={`Talep ${talepEtiket}`}
         description={`Oluşturulma tarihi: ${formatDate(talep.Tarih)}`}
         actions={
           <>
@@ -40,6 +45,9 @@ export default async function TalepDetailPage({
                 <ArrowLeft className="size-4" /> Listeye dön
               </Link>
             </Button>
+            {iptalEdilebilir && (
+              <IptalTalepButton talepId={talep.ID} talepNo={talepEtiket} />
+            )}
             <StatusBadge value={talep.Durum} />
           </>
         }
@@ -90,7 +98,7 @@ export default async function TalepDetailPage({
                 <tr className="text-left">
                   <th className="px-4 py-2 font-medium">#</th>
                   <th className="px-4 py-2 font-medium">Numune</th>
-                  <th className="px-4 py-2 font-medium">Özellik</th>
+                  <th className="px-4 py-2 font-medium">Seri/Lot No vb.</th>
                   <th className="px-4 py-2 font-medium">Analiz</th>
                   <th className="px-4 py-2 font-medium">Metot</th>
                 </tr>

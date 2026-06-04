@@ -29,6 +29,7 @@ export interface TalepDetail {
   talep: {
     ID: number;
     TalepNo: number;
+    DisTalepKodu: string | null;
     Tarih: Date | null;
     FirmaKodu: string | null;
     Durum: string | null;
@@ -69,12 +70,13 @@ export async function getTalepDetail(
   const talep = await queryOne<{
     ID: number;
     TalepNo: number;
+    DisTalepKodu: string | null;
     Tarih: Date | null;
     FirmaKodu: string | null;
     Durum: string | null;
     Tur: string | null;
   }>(
-    `SELECT ID, TalepNo, Tarih, FirmaKodu, Durum, Tur
+    `SELECT ID, TalepNo, DisTalepKodu, Tarih, FirmaKodu, Durum, Tur
      FROM Talep WHERE ID = @id`,
     { id }
   );
@@ -160,6 +162,26 @@ export interface YeniTalepInput {
   sozlesme: number;
 }
 
+/**
+ * Talep no için kullanılan alfabe — karışıklığa yatkın (0/O, 1/I, L) karakterler
+ * dışarıda. Crockford-style.
+ */
+const TALEP_KOD_ALFABE = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
+
+function randomKod(uzunluk = 4): string {
+  let s = "";
+  for (let i = 0; i < uzunluk; i++) {
+    s += TALEP_KOD_ALFABE[Math.floor(Math.random() * TALEP_KOD_ALFABE.length)];
+  }
+  return s;
+}
+
+/** "ÜGAM/26/XXXX" — Yıl 2 haneli, XXXX rastgele 4 karakter. */
+function uretDisTalepKodu(now = new Date()): string {
+  const yil = String(now.getFullYear()).slice(2);
+  return `ÜGAM/${yil}/${randomKod(4)}`;
+}
+
 export async function createTalep(input: YeniTalepInput): Promise<number> {
   const pool = await getPool();
   const tx = new sql.Transaction(pool);
@@ -173,21 +195,37 @@ export async function createTalep(input: YeniTalepInput): Promise<number> {
     const lastNo = Number(last.recordset?.[0]?.TalepNo ?? 0);
     const yeniNo = lastNo + 1;
 
-    // 2) Talep
+    // 2) Çakışmasız dış kod (en fazla 5 deneme) — 31^4 = 923k ihtimal, çakışma
+    //    pratikte ihmal edilebilir ama yine de retry koyuyoruz.
+    let disKod = uretDisTalepKodu();
+    for (let i = 0; i < 5; i++) {
+      const dupe = await new sql.Request(tx)
+        .input("k", sql.NVarChar(20), disKod)
+        .query<{ n: number }>(
+          `SELECT COUNT(*) AS n FROM dbo.Talep WHERE DisTalepKodu = @k`
+        );
+      if ((dupe.recordset[0]?.n ?? 0) === 0) break;
+      disKod = uretDisTalepKodu();
+    }
+
+    // 3) Talep
     const talepReq = new sql.Request(tx)
       .input("tarih", sql.Date, new Date())
       .input("kod", sql.NVarChar(10), input.user.kod ?? "")
       .input("sozlesme", sql.Int, input.sozlesme ? 1 : 0)
       .input("durum", sql.NVarChar(20), "Yeni Talep")
       .input("talepNo", sql.Int, yeniNo)
+      .input("disTalepKodu", sql.NVarChar(20), disKod)
       .input("yetkili", sql.Int, 0)
-      .input("tur", sql.NVarChar(6), "Web")
+      // VIEW_TALEP_LISTE yalnızca Tur='Analiz' kayıtlarını gösterir; portaldan
+      // oluşturulan talepler de analiz talebi olduğundan bu değerle yazılır.
+      .input("tur", sql.NVarChar(10), "Analiz")
       .input("olusturan", sql.Int, input.user.id);
 
     const inserted = await talepReq.query<{ ID: number }>(
-      `INSERT INTO Talep (Tarih, FirmaKodu, Sozlesme, Durum, TalepNo, Yetkili, Tur, Olusturan)
+      `INSERT INTO Talep (Tarih, FirmaKodu, Sozlesme, Durum, TalepNo, DisTalepKodu, Yetkili, Tur, Olusturan)
        OUTPUT INSERTED.ID
-       VALUES (@tarih, @kod, @sozlesme, @durum, @talepNo, @yetkili, @tur, @olusturan)`
+       VALUES (@tarih, @kod, @sozlesme, @durum, @talepNo, @disTalepKodu, @yetkili, @tur, @olusturan)`
     );
     const talepId = inserted.recordset[0].ID;
 
