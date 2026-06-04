@@ -13,6 +13,7 @@ import { formatDate } from "@/lib/utils";
 import { ArrowLeft, Printer } from "lucide-react";
 import { findFirmaById } from "@/lib/repositories/firma";
 import { MailNotifyButton } from "@/components/mail-notify-button";
+import { TeklifOnayButton } from "@/components/teklif-onay-button";
 import { isAdmin } from "@/lib/permissions";
 
 export const dynamic = "force-dynamic";
@@ -37,8 +38,9 @@ export default async function TeklifDetailPage({
   if (user.tur !== "Admin") {
     const targetFirma = await findFirmaById(baslik.FirmaID ?? -1);
     const okMusteri =
-      baslik.Firma_Adi != null &&
-      (baslik.Firma_Adi === user.firmaAdi ||
+      baslik.FirmaID != null &&
+      (baslik.FirmaID === user.id ||
+        baslik.Firma_Adi === user.firmaAdi ||
         targetFirma?.Kod === user.kod);
     const okPlasiyer =
       user.tur === "Plasiyer" && targetFirma?.PlasiyerID === user.plasiyerId;
@@ -60,10 +62,21 @@ export default async function TeklifDetailPage({
               </Link>
             </Button>
             <Button variant="outline" size="sm" asChild>
-              <Link href={`/teklifler/${numId}/yazdir`} target="_blank">
+              <Link href={`/teklif-print/${numId}`} target="_blank">
                 <Printer className="size-4" /> Yazdır
               </Link>
             </Button>
+            {baslik.TeklifDurum === "Onay Bekleniyor" && (
+              <TeklifOnayButton
+                teklifId={numId}
+                teklif={{
+                  no: baslik.TeklifNo,
+                  musteriAd: baslik.Firma_Adi ?? "",
+                  tarih: formatDate(baslik.Tarih),
+                  durum: baslik.TeklifDurum,
+                }}
+              />
+            )}
             {isAdmin(user) && <MailNotifyButton tur="teklif" id={numId} />}
             <StatusBadge value={baslik.TeklifDurum} />
           </>
@@ -151,8 +164,92 @@ export default async function TeklifDetailPage({
           </div>
         </CardContent>
       </Card>
+
+      {satirlar.length > 0 && (
+        <Card className="mt-6">
+          <CardHeader>
+            <CardTitle>Toplam</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <TeklifToplam
+              satirlar={satirlar}
+              kdvOran={baslik.KdvOran ?? 0}
+              genelIskonto={baslik.GenelIskonto ?? 0}
+              currency={currency}
+            />
+          </CardContent>
+        </Card>
+      )}
     </>
   );
+}
+
+/**
+ * Ara toplam → genel iskonto → KDV → genel toplam özetini gösterir.
+ * `s.Toplam` ve `s["Birim Fiyat"]` zaten tr-TR formatında string;
+ * burada gerçek sayıyı tekrar elde etmek için ondalık virgülü noktaya çevirip
+ * binlik ayracını sileriz.
+ */
+function TeklifToplam({
+  satirlar,
+  kdvOran,
+  genelIskonto,
+  currency,
+}: {
+  satirlar: { Toplam: string }[];
+  kdvOran: number;
+  genelIskonto: number;
+  currency: string;
+}) {
+  const araToplam = satirlar.reduce((acc, s) => acc + parseTrNumber(s.Toplam), 0);
+  const iskontoTutar = araToplam * (genelIskonto / 100);
+  const netAraToplam = araToplam - iskontoTutar;
+  const kdvTutar = netAraToplam * (kdvOran / 100);
+  const genelToplam = netAraToplam + kdvTutar;
+
+  return (
+    <div className="ml-auto w-full sm:max-w-sm text-sm">
+      <Row label="Ara Toplam" value={formatMoney(araToplam, currency)} />
+      {genelIskonto > 0 && (
+        <Row
+          label={`Genel İskonto (${genelIskonto}%)`}
+          value={`− ${formatMoney(iskontoTutar, currency)}`}
+        />
+      )}
+      <Row label={`KDV (${kdvOran}%)`} value={formatMoney(kdvTutar, currency)} />
+      <div className="mt-2 pt-2 border-t flex items-center justify-between">
+        <span className="text-xs uppercase tracking-wide text-muted-foreground">
+          Genel Toplam
+        </span>
+        <span className="text-lg font-semibold tabular-nums">
+          {formatMoney(genelToplam, currency)}
+        </span>
+      </div>
+    </div>
+  );
+}
+
+function Row({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex items-center justify-between py-1">
+      <span className="text-muted-foreground">{label}</span>
+      <span className="tabular-nums">{value}</span>
+    </div>
+  );
+}
+
+function parseTrNumber(s: string): number {
+  // "2.215,00" -> 2215.00 ; "115,00" -> 115
+  const clean = s.replace(/\./g, "").replace(",", ".");
+  const n = Number(clean);
+  return Number.isFinite(n) ? n : 0;
+}
+
+function formatMoney(n: number, currency: string): string {
+  return `${n.toLocaleString("tr-TR", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })} ${currency}`;
 }
 
 function Field({
