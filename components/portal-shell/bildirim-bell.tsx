@@ -20,7 +20,7 @@ import type { Bildirim, BildirimTuru } from "@/lib/repositories/bildirim";
 interface Props {
   bildirimler: Array<Omit<Bildirim, "tarih"> & { tarih: string }>;
   lastSeen: string | null;
-  variant?: "sidebar" | "topbar";
+  variant?: "sidebar" | "topbar" | "floating";
 }
 
 const ICONS: Record<BildirimTuru, React.ComponentType<{ className?: string }>> = {
@@ -88,6 +88,12 @@ export function BildirimBell({
 
   React.useEffect(() => {
     if (!open || !btnRef.current) return;
+    // Floating buton sabit konumda (fixed bottom-6 right-6) — paneli rect'ten
+    // hesaplamaya gerek yok, render'da doğrudan bottom/right offset uygulanır.
+    if (variant === "floating") {
+      setPos(null);
+      return;
+    }
     const rect = btnRef.current.getBoundingClientRect();
     const PANEL_W = 384; // 24rem
     const PANEL_H = 480;
@@ -97,10 +103,20 @@ export function BildirimBell({
     let top: number;
 
     if (variant === "sidebar") {
-      // butona göre üstte ve hizalı, sağdan taşma kontrolü
-      top = rect.top - PANEL_H - M;
-      left = rect.left;
-      if (top < M) top = rect.bottom + M;
+      // Sidebar: paneli butonun SAĞINA aç (sidebar üstüne binmesin).
+      left = rect.right + M;
+      top = rect.top;
+      if (left + PANEL_W > window.innerWidth - M) {
+        left = window.innerWidth - PANEL_W - M;
+      }
+      if (left < rect.right) {
+        left = Math.max(M, rect.left);
+        top = rect.top - PANEL_H - M;
+        if (top < M) top = rect.bottom + M;
+      }
+      if (top + PANEL_H > window.innerHeight - M) {
+        top = Math.max(M, window.innerHeight - PANEL_H - M);
+      }
     } else {
       // topbar: butona göre altta, sağdan hizalı
       top = rect.bottom + M;
@@ -126,13 +142,22 @@ export function BildirimBell({
   const unreadCount = unread.length;
 
   const isSidebar = variant === "sidebar";
+  const isFloating = variant === "floating";
 
-  const panel = open && pos && mounted ? (
+  // Floating: panel butonun hemen üstünde fixed offset'le konumlanır
+  // (button: bottom-6 right-6 + h-14 → bottom 88px, right 24px = right-6).
+  // Sidebar/topbar: hesaplanan {top, left} kullanılır.
+  const panelReady = open && mounted && (isFloating || pos);
+
+  const panel = panelReady ? (
     <div
       ref={panelRef}
       data-bildirim-panel
-      className="fixed z-[60] w-80 sm:w-96 max-h-[70vh] bg-popover text-popover-foreground border shadow-xl flex flex-col"
-      style={{ top: pos.top, left: pos.left }}
+      className={cn(
+        "fixed z-[60] w-80 sm:w-96 max-h-[70vh] bg-popover text-popover-foreground border shadow-xl flex flex-col",
+        isFloating && "bottom-[88px] right-6"
+      )}
+      style={isFloating ? undefined : { top: pos!.top, left: pos!.left }}
       onClick={(e) => e.stopPropagation()}
     >
       <div className="px-4 py-3 border-b flex items-center justify-between gap-2">
@@ -160,18 +185,16 @@ export function BildirimBell({
       </div>
 
       <div className="overflow-y-auto flex-1">
-        {items.length === 0 ? (
+        {unread.length === 0 ? (
           <div className="px-4 py-12 text-center text-sm text-muted-foreground">
             <Bell className="size-8 mx-auto mb-2 opacity-30" />
-            Son 30 günde bildirim yok.
+            Okunmamış bildirim yok.
           </div>
         ) : (
           <ul className="divide-y">
-            {items.map((b) => {
+            {unread.map((b) => {
               const Icon = ICONS[b.type];
-              const isUnread = lastSeenDate
-                ? b.tarih > lastSeenDate
-                : true;
+              const isUnread = true; // listede sadece okunmamışlar var
               return (
                 <li key={b.id}>
                   <Link
@@ -224,6 +247,40 @@ export function BildirimBell({
       </div>
     </div>
   ) : null;
+
+  if (isFloating) {
+    return (
+      <>
+        <button
+          ref={btnRef}
+          type="button"
+          onClick={() => setOpen((v) => !v)}
+          aria-label="Bildirimler"
+          title="Bildirimler"
+          className={cn(
+            "fixed z-40 bottom-6 right-6",
+            "h-14 w-14 rounded-full inline-flex items-center justify-center",
+            "bg-primary text-primary-foreground shadow-lg shadow-black/20",
+            "hover:brightness-110 active:scale-95 transition",
+            "focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background"
+          )}
+        >
+          <Bell className="size-5" />
+          {unreadCount > 0 && (
+            <span
+              className={cn(
+                "absolute -top-1 -right-1 inline-flex items-center justify-center min-w-[20px] h-[20px] px-1.5 text-[10px] font-bold leading-none rounded-full",
+                "bg-destructive text-destructive-foreground ring-2 ring-background"
+              )}
+            >
+              {unreadCount > 9 ? "9+" : unreadCount}
+            </span>
+          )}
+        </button>
+        {mounted && panel ? createPortal(panel, document.body) : null}
+      </>
+    );
+  }
 
   return (
     <>

@@ -159,11 +159,6 @@ function NavContent({ user, signOutAction, bildirimler, lastSeen }: Props) {
         </div>
 
         <div className="mt-2 flex items-center gap-1">
-          <BildirimBell
-            bildirimler={bildirimler}
-            lastSeen={lastSeen}
-            variant="sidebar"
-          />
           <ThemeToggle />
           <form action={signOutAction} className="flex-1">
             <Button
@@ -249,6 +244,15 @@ export function SidebarShell({
         <main className="flex-1 min-w-0">
           <div className="max-w-7xl mx-auto p-4 sm:p-6 lg:p-8">{children}</div>
         </main>
+      </div>
+
+      {/* Floating bildirim butonu — yalnız desktop (mobilde topbar versiyonu var) */}
+      <div className="hidden lg:block">
+        <BildirimBell
+          bildirimler={bildirimler}
+          lastSeen={lastSeen}
+          variant="floating"
+        />
       </div>
 
       {/* Mobile drawer */}
