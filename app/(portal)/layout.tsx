@@ -7,6 +7,11 @@ import {
   getSonGoruldu,
 } from "@/lib/repositories/bildirim";
 
+// Bildirimler her sayfa geçişinde fresh çekilsin — Next.js layout cache'i
+// yüzünden eski payload gelmesin.
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 async function handleSignOut() {
   "use server";
   await signOut({ redirect: false });

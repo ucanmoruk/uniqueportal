@@ -71,6 +71,7 @@ export function BelgelerTable({
           {r["Dosya Türü"] ?? "PDF"}
         </span>
       ),
+      filterable: true,
     },
     {
       key: "ad",
@@ -88,16 +89,23 @@ export function BelgelerTable({
       sortable: false,
       searchable: false,
       align: "right",
-      cell: (r) => (
-        <a
-          href={`/api/belge/${r.ID}`}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="inline-flex items-center gap-1 border bg-background px-2.5 py-1 text-xs font-medium hover:bg-accent hover:text-accent-foreground"
-        >
-          <Eye className="size-3.5" /> Görüntüle
-        </a>
-      ),
+      cell: (r) => {
+        // Yol http(s) ile başlıyorsa dış URL (NKR_RaporOnay.YayinUrl) — direkt aç.
+        // Aksi takdirde manuel yüklenmiş PDF — /api/belge/[id] üzerinden.
+        const isExternal =
+          !!r.Yol && /^https?:\/\//i.test(r.Yol.trim());
+        const href = isExternal ? (r.Yol as string) : `/api/belge/${r.ID}`;
+        return (
+          <a
+            href={href}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1 border bg-background px-2.5 py-1 text-xs font-medium hover:bg-accent hover:text-accent-foreground"
+          >
+            <Eye className="size-3.5" /> Görüntüle
+          </a>
+        );
+      },
     },
   ];
 
