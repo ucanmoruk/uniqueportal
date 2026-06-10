@@ -87,6 +87,7 @@ export function FaturalarTable({
       header: "Ödeme",
       accessor: (r) => r["Ödeme"],
       cell: (r) => <StatusBadge value={r["Ödeme"]} />,
+      filterable: true,
     },
     ...(isAdmin
       ? ([

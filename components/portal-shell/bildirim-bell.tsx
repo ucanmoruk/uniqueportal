@@ -3,19 +3,16 @@
 import * as React from "react";
 import { createPortal } from "react-dom";
 import Link from "next/link";
-import {
-  Bell,
-  FileText,
-  FileSpreadsheet,
-  Receipt,
-  CheckCheck,
-  LifeBuoy,
-  MessageSquare,
-} from "lucide-react";
+import { useRouter } from "next/navigation";
+import { Bell, CheckCheck } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { markAllReadAction } from "@/app/(portal)/bildirim-actions";
-import type { Bildirim, BildirimTuru } from "@/lib/repositories/bildirim";
+import type { Bildirim } from "@/lib/repositories/bildirim";
+import {
+  BILDIRIM_ICONS,
+  BILDIRIM_ICON_COLORS,
+} from "@/components/portal-shell/bildirim-icons";
 
 interface Props {
   bildirimler: Array<Omit<Bildirim, "tarih"> & { tarih: string }>;
@@ -23,21 +20,8 @@ interface Props {
   variant?: "sidebar" | "topbar" | "floating";
 }
 
-const ICONS: Record<BildirimTuru, React.ComponentType<{ className?: string }>> = {
-  rapor: FileText,
-  teklif: FileSpreadsheet,
-  fatura: Receipt,
-  "destek-yeni": LifeBuoy,
-  "destek-yanit": MessageSquare,
-};
-
-const ICON_COLORS: Record<BildirimTuru, string> = {
-  rapor: "text-emerald-600 bg-emerald-50 dark:bg-emerald-950/40 dark:text-emerald-300",
-  teklif: "text-blue-600 bg-blue-50 dark:bg-blue-950/40 dark:text-blue-300",
-  fatura: "text-amber-700 bg-amber-50 dark:bg-amber-950/40 dark:text-amber-300",
-  "destek-yeni": "text-violet-700 bg-violet-50 dark:bg-violet-950/40 dark:text-violet-300",
-  "destek-yanit": "text-violet-700 bg-violet-50 dark:bg-violet-950/40 dark:text-violet-300",
-};
+const ICONS = BILDIRIM_ICONS;
+const ICON_COLORS = BILDIRIM_ICON_COLORS;
 
 function timeAgo(d: Date): string {
   const now = Date.now();
@@ -62,6 +46,8 @@ export function BildirimBell({
   lastSeen,
   variant = "sidebar",
 }: Props) {
+  const router = useRouter();
+  const [marking, startMarking] = React.useTransition();
   const [open, setOpen] = React.useState(false);
   const [mounted, setMounted] = React.useState(false);
   const [pos, setPos] = React.useState<{ top: number; left: number } | null>(null);
@@ -139,7 +125,41 @@ export function BildirimBell({
   const unread = lastSeenDate
     ? items.filter((b) => b.tarih > lastSeenDate)
     : items;
-  const unreadCount = unread.length;
+  const serverUnread = unread.length;
+
+  // Canlı sayaç — 60 sn'de bir /api/bildirim/sayac yoklar. Sunucudan gelen
+  // statik prop ile poll sonucu arasından büyüğü gösterilir; böylece sayfa
+  // yenilenmeden yeni bildirim sayısı görünür. Panel açılınca listeyi tazeler.
+  const [liveUnread, setLiveUnread] = React.useState<number | null>(null);
+  React.useEffect(() => {
+    let alive = true;
+    async function poll() {
+      try {
+        const res = await fetch("/api/bildirim/sayac", { cache: "no-store" });
+        if (!res.ok) return;
+        const data = await res.json();
+        if (alive && typeof data.unread === "number") setLiveUnread(data.unread);
+      } catch {
+        /* sessiz */
+      }
+    }
+    const iv = setInterval(poll, 60_000);
+    return () => {
+      alive = false;
+      clearInterval(iv);
+    };
+  }, []);
+
+  const unreadCount = Math.max(serverUnread, liveUnread ?? 0);
+
+  // Panel açıldığında, canlı sayaç prop'tan fazlaysa liste günceldeğil demektir
+  // → RSC'yi tazele ki yeni bildirimler panelde görünsün.
+  React.useEffect(() => {
+    if (open && liveUnread != null && liveUnread > serverUnread) {
+      router.refresh();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
 
   const isSidebar = variant === "sidebar";
   const isFloating = variant === "floating";
@@ -170,17 +190,25 @@ export function BildirimBell({
           </div>
         </div>
         {unreadCount > 0 && (
-          <form action={markAllReadAction}>
-            <Button
-              type="submit"
-              variant="ghost"
-              size="sm"
-              className="text-primary"
-              onClick={() => setOpen(false)}
-            >
-              <CheckCheck className="size-3.5" /> Tümünü okudum
-            </Button>
-          </form>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="text-primary"
+            disabled={marking}
+            onClick={() => {
+              startMarking(async () => {
+                await markAllReadAction();
+                // Server action sonrası RSC payload'ı yenile -> Bell yeni
+                // lastSeen prop alır, unread sayacı 0'a düşer.
+                router.refresh();
+                setOpen(false);
+              });
+            }}
+          >
+            <CheckCheck className="size-3.5" />
+            {marking ? "Güncelleniyor…" : "Tümünü okudum"}
+          </Button>
         )}
       </div>
 

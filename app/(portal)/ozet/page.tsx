@@ -9,9 +9,11 @@ import { StatusBadge } from "@/components/ui/badge";
 import {
   FileText,
   FileBarChart,
+  FileSpreadsheet,
   CircleDollarSign,
   Wallet,
   ArrowUpRight,
+  ArrowRight,
   Plus,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -23,6 +25,15 @@ interface Stats {
   raporSayisi: number;
   ciro: number;
   bakiye: number;
+}
+
+interface ActionItems {
+  /** Müşterinin onayını bekleyen teklif sayısı */
+  bekleyenTeklif: number;
+  /** Son 30 günde yayınlanan rapor sayısı */
+  yeniRapor: number;
+  /** Analiz/işlem aşamasındaki (devam eden) talep sayısı */
+  devamEdenTalep: number;
 }
 
 async function loadStats(
@@ -67,6 +78,51 @@ async function loadStats(
   };
 }
 
+/**
+ * "Dikkat gerektirenler" — müşterinin aksiyon alması gereken sayılar.
+ * Hatalı sorgu durumunda 0 dönsün diye her biri ayrı catch'li.
+ */
+async function loadActionItems(
+  user: Awaited<ReturnType<typeof requireUser>>
+): Promise<ActionItems> {
+  const firmaFilter = isAdmin(user) ? "" : "AND tb.MusteriID = @id";
+  const params = isAdmin(user) ? {} : { id: user.id };
+
+  const bekleyenTeklif = await queryOne<{ n: number }>(
+    `SELECT COUNT(*) AS n
+     FROM cosmoroot.TeklifBaslik tb
+     WHERE tb.Durum = 'Aktif' AND tb.TeklifDurum = N'Onay Bekleniyor' ${firmaFilter}`,
+    params
+  ).catch(() => ({ n: 0 }));
+
+  const since = new Date();
+  since.setDate(since.getDate() - 30);
+  const raporFilter = isAdmin(user) ? "" : "AND n.Firma_ID = @id";
+  const yeniRapor = await queryOne<{ n: number }>(
+    `SELECT COUNT(*) AS n
+     FROM cosmoroot.NKR_RaporOnay o
+     INNER JOIN dbo.NKR n ON n.ID = o.NkrID
+     WHERE o.YayinUrl IS NOT NULL AND LTRIM(RTRIM(o.YayinUrl)) <> ''
+       AND n.Durum = N'Aktif' AND o.YayinTarihi >= @since ${raporFilter}`,
+    isAdmin(user) ? { since } : { since, id: user.id }
+  ).catch(() => ({ n: 0 }));
+
+  // Devam eden talepler: Yeni Talep / işlem gören (Pasif/Tamamlandı dışı)
+  const talepScope = scopeByFirma(user, "firmakodu");
+  const devamEden = await queryOne<{ n: number }>(
+    `SELECT COUNT(*) AS n FROM VIEW_TALEP_LISTE
+     WHERE ${talepScope.clause}
+       AND Durum NOT IN (N'Tamamlandı', N'Raporlandı', N'İptal', N'Pasif')`,
+    talepScope.params
+  ).catch(() => ({ n: 0 }));
+
+  return {
+    bekleyenTeklif: Number(bekleyenTeklif?.n ?? 0),
+    yeniRapor: Number(yeniRapor?.n ?? 0),
+    devamEdenTalep: Number(devamEden?.n ?? 0),
+  };
+}
+
 async function loadRecentTalepler(
   user: Awaited<ReturnType<typeof requireUser>>
 ) {
@@ -89,9 +145,10 @@ async function loadRecentTalepler(
 
 export default async function OzetPage() {
   const user = await requireUser();
-  const [stats, recents] = await Promise.all([
+  const [stats, recents, actions] = await Promise.all([
     loadStats(user),
     loadRecentTalepler(user),
+    loadActionItems(user),
   ]);
   const showOlusturan = isAdmin(user);
 
@@ -109,12 +166,52 @@ export default async function OzetPage() {
         }
       />
 
+      {/* Dikkat gerektirenler — yalnızca aksiyon varsa göster */}
+      {(actions.bekleyenTeklif > 0 ||
+        actions.yeniRapor > 0 ||
+        stats.bakiye > 0) && (
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 mb-6">
+          {actions.bekleyenTeklif > 0 && (
+            <ActionBanner
+              tone="primary"
+              icon={FileSpreadsheet}
+              title={`${actions.bekleyenTeklif} teklif onayınızı bekliyor`}
+              desc="İncele ve onayla/redet"
+              href="/teklifler"
+            />
+          )}
+          {actions.yeniRapor > 0 && (
+            <ActionBanner
+              tone="success"
+              icon={FileBarChart}
+              title={`${actions.yeniRapor} yeni rapor yayınlandı`}
+              desc="Son 30 gün · Belgelerim'de"
+              href="/belgeler"
+            />
+          )}
+          {stats.bakiye > 0 && (
+            <ActionBanner
+              tone="warning"
+              icon={Wallet}
+              title={`${formatTL(stats.bakiye)} açık bakiye`}
+              desc="Faturalarınızı görüntüleyin"
+              href="/faturalar"
+            />
+          )}
+        </div>
+      )}
+
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4 mb-6">
         <StatCard
           title="Toplam Talep"
           value={stats.talepSayisi.toLocaleString("tr-TR")}
           icon={FileText}
           href="/talepler"
+          sub={
+            actions.devamEdenTalep > 0
+              ? `${actions.devamEdenTalep} devam ediyor`
+              : undefined
+          }
         />
         <StatCard
           title="Aktif Belge"
@@ -222,18 +319,64 @@ export default async function OzetPage() {
   );
 }
 
+function ActionBanner({
+  tone,
+  icon: Icon,
+  title,
+  desc,
+  href,
+}: {
+  tone: "primary" | "success" | "warning";
+  icon: React.ComponentType<{ className?: string }>;
+  title: string;
+  desc: string;
+  href: string;
+}) {
+  const styles = {
+    primary:
+      "border-primary/30 bg-primary-subtle/40 hover:border-primary/50",
+    success:
+      "border-emerald-300/50 bg-emerald-50 dark:bg-emerald-950/30 hover:border-emerald-400/60",
+    warning:
+      "border-amber-300/50 bg-amber-50 dark:bg-amber-950/30 hover:border-amber-400/60",
+  }[tone];
+  const iconCls = {
+    primary: "text-primary",
+    success: "text-emerald-600 dark:text-emerald-400",
+    warning: "text-amber-600 dark:text-amber-400",
+  }[tone];
+
+  return (
+    <Link
+      href={href}
+      className={`group flex items-center gap-3 rounded-lg border p-4 transition-colors ${styles}`}
+    >
+      <span className={`inline-flex shrink-0 items-center justify-center size-10 rounded-md bg-background/70 ${iconCls}`}>
+        <Icon className="size-5" />
+      </span>
+      <div className="min-w-0 flex-1">
+        <div className="font-semibold text-sm leading-tight">{title}</div>
+        <div className="text-xs text-muted-foreground mt-0.5">{desc}</div>
+      </div>
+      <ArrowRight className="size-4 text-muted-foreground group-hover:translate-x-0.5 transition-transform shrink-0" />
+    </Link>
+  );
+}
+
 function StatCard({
   title,
   value,
   icon: Icon,
   href,
   tone = "default",
+  sub,
 }: {
   title: string;
   value: string;
   icon: React.ComponentType<{ className?: string }>;
   href: string;
   tone?: "default" | "success" | "warning";
+  sub?: string;
 }) {
   const valueCls = {
     default: "text-foreground",
@@ -262,6 +405,9 @@ function StatCard({
           <div className={`text-2xl font-semibold mt-1.5 ${valueCls}`}>
             {value}
           </div>
+          {sub && (
+            <div className="text-[11px] text-muted-foreground mt-1">{sub}</div>
+          )}
         </div>
         <span
           className={`inline-flex shrink-0 items-center justify-center size-9 rounded-md ${iconBg}`}

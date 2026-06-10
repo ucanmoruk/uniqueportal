@@ -3,8 +3,9 @@
 import Link from "next/link";
 import { SmartTable, type SmartColumn } from "@/components/smart-table";
 import { StatusBadge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { formatDate } from "@/lib/utils";
-import { ChevronRight } from "lucide-react";
+import { ChevronRight, FileText, Plus } from "lucide-react";
 import type { TalepListeItem } from "@/lib/repositories/talep";
 
 export function TaleplerTable({
@@ -54,6 +55,7 @@ export function TaleplerTable({
       header: "Durum",
       accessor: (r) => r.Durum,
       cell: (r) => <StatusBadge value={r.Durum} />,
+      filterable: true,
     },
     {
       key: "actions",
@@ -78,7 +80,24 @@ export function TaleplerTable({
       columns={columns}
       rowKey={(r, idx) => `${r.ID}-${idx}`}
       searchPlaceholder="Talep no, müşteri, oluşturan…"
-      emptyMessage="Henüz talep bulunmuyor."
+      emptyMessage={
+        <div className="flex flex-col items-center gap-3 py-4">
+          <span className="inline-flex items-center justify-center size-12 rounded-full bg-muted text-muted-foreground">
+            <FileText className="size-6" />
+          </span>
+          <div className="space-y-1">
+            <p className="font-medium text-foreground">Henüz talep yok</p>
+            <p className="text-sm text-muted-foreground">
+              İlk analiz talebinizi oluşturarak başlayın.
+            </p>
+          </div>
+          <Button asChild size="sm">
+            <Link href="/talepler/yeni">
+              <Plus className="size-4" /> Yeni Talep Oluştur
+            </Link>
+          </Button>
+        </div>
+      }
       rowHref={(r) => `/talepler/${r.ID}`}
     />
   );

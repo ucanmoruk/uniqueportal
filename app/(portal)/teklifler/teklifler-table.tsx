@@ -60,6 +60,7 @@ export function TekliflerTable({
       header: "Durum",
       accessor: (r) => r.Durum,
       cell: (r) => <StatusBadge value={r.Durum} />,
+      filterable: true,
     },
     {
       key: "actions",

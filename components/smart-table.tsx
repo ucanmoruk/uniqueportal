@@ -16,6 +16,8 @@ import {
   ChevronDown,
   Search,
   X,
+  ListFilter,
+  Check,
 } from "lucide-react";
 
 export interface SmartColumn<T> {
@@ -27,6 +29,13 @@ export interface SmartColumn<T> {
   sortable?: boolean;
   searchable?: boolean;
   className?: string;
+  /**
+   * Tanımlıysa kolon başlığının yanında değer-bazlı bir filtre dropdown'u
+   * gösterilir. Değerler bu fonksiyonla çıkarılır (null → "—").
+   */
+  filterable?: boolean;
+  /** filterable kolonun filtre değerini üretir (yoksa accessor kullanılır). */
+  filterValue?: (row: T) => string | null | undefined;
 }
 
 interface SmartTableProps<T> {
@@ -35,7 +44,7 @@ interface SmartTableProps<T> {
   rowKey: (row: T, idx: number) => string | number;
   searchPlaceholder?: string;
   pageSize?: number;
-  emptyMessage?: string;
+  emptyMessage?: React.ReactNode;
   toolbar?: React.ReactNode;
   rowHref?: (row: T) => string | undefined;
   /** Çoklu seçim aktif edilirse satır başına checkbox kolonu eklenir. */
@@ -53,6 +62,85 @@ function toComparable(v: unknown): string | number {
   if (v instanceof Date) return v.getTime();
   if (typeof v === "number") return v;
   return String(v).toLocaleLowerCase("tr-TR");
+}
+
+/** Tek bir kolon için çoklu-seçim filtre dropdown'u. */
+function FacetFilter({
+  label,
+  values,
+  selected,
+  onToggle,
+}: {
+  label: string;
+  values: string[];
+  selected: Set<string>;
+  onToggle: (value: string) => void;
+}) {
+  const [open, setOpen] = React.useState(false);
+  const ref = React.useRef<HTMLDivElement>(null);
+
+  React.useEffect(() => {
+    function onClick(e: MouseEvent) {
+      if (!ref.current?.contains(e.target as Node)) setOpen(false);
+    }
+    if (open) {
+      document.addEventListener("mousedown", onClick);
+      return () => document.removeEventListener("mousedown", onClick);
+    }
+  }, [open]);
+
+  if (values.length === 0) return null;
+  const count = selected.size;
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className={cn(
+          "inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs font-medium transition-colors",
+          count > 0
+            ? "border-primary/40 bg-primary-subtle/40 text-foreground"
+            : "bg-background hover:bg-accent text-muted-foreground"
+        )}
+      >
+        {label}
+        {count > 0 && (
+          <span className="inline-flex items-center justify-center min-w-[16px] h-4 px-1 rounded-full bg-primary text-primary-foreground text-[10px] font-semibold">
+            {count}
+          </span>
+        )}
+        <ChevronDown className="size-3" />
+      </button>
+      {open && (
+        <div className="absolute z-30 mt-1 min-w-[12rem] max-h-64 overflow-y-auto rounded-md border bg-popover text-popover-foreground shadow-lg py-1">
+          {values.map((v) => {
+            const isSel = selected.has(v);
+            return (
+              <button
+                key={v}
+                type="button"
+                onClick={() => onToggle(v)}
+                className="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-left hover:bg-accent"
+              >
+                <span
+                  className={cn(
+                    "inline-flex items-center justify-center size-4 rounded border shrink-0",
+                    isSel
+                      ? "bg-primary border-primary text-primary-foreground"
+                      : "border-input"
+                  )}
+                >
+                  {isSel && <Check className="size-3" />}
+                </span>
+                <span className="truncate">{v}</span>
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
 }
 
 export function SmartTable<T extends object>({
@@ -73,26 +161,100 @@ export function SmartTable<T extends object>({
   const [sortDir, setSortDir] = React.useState<SortDir>("asc");
   const [page, setPage] = React.useState(1);
   const [pageSize, setPageSize] = React.useState(initialPageSize);
+  // Kolon bazlı seçili filtre değerleri (key → seçili değer kümesi)
+  const [filters, setFilters] = React.useState<Record<string, Set<string>>>({});
   const [selectedKeys, setSelectedKeys] = React.useState<Set<string | number>>(
     () => new Set()
   );
 
   React.useEffect(() => {
     setPage(1);
-  }, [search, pageSize]);
+  }, [search, pageSize, filters]);
+
+  // Filtrelenebilir kolonlar ve her biri için benzersiz değerler
+  const filterableCols = React.useMemo(
+    () => columns.filter((c) => c.filterable),
+    [columns]
+  );
+
+  const filterValueOf = React.useCallback(
+    (c: SmartColumn<T>, row: T): string => {
+      const raw = c.filterValue
+        ? c.filterValue(row)
+        : c.accessor
+          ? c.accessor(row)
+          : undefined;
+      if (raw == null || raw === "") return "—";
+      return raw instanceof Date ? raw.toISOString() : String(raw);
+    },
+    []
+  );
+
+  const facetValues = React.useMemo(() => {
+    const map: Record<string, string[]> = {};
+    for (const c of filterableCols) {
+      const set = new Set<string>();
+      for (const row of rows) set.add(filterValueOf(c, row));
+      map[c.key] = [...set].sort((a, b) =>
+        a.localeCompare(b, "tr-TR")
+      );
+    }
+    return map;
+  }, [filterableCols, rows, filterValueOf]);
 
   const filtered = React.useMemo(() => {
-    if (!search.trim()) return rows;
-    const term = search.trim().toLocaleLowerCase("tr-TR");
-    return rows.filter((row) =>
-      columns.some((c) => {
-        if (c.searchable === false) return false;
-        const v = c.accessor ? c.accessor(row) : undefined;
-        const str = v == null ? "" : v instanceof Date ? v.toISOString() : String(v);
-        return str.toLocaleLowerCase("tr-TR").includes(term);
-      })
+    let result = rows;
+
+    // 1) Facet filtreleri
+    const activeFilterKeys = Object.keys(filters).filter(
+      (k) => filters[k] && filters[k].size > 0
     );
-  }, [rows, search, columns]);
+    if (activeFilterKeys.length > 0) {
+      result = result.filter((row) =>
+        activeFilterKeys.every((key) => {
+          const col = columns.find((c) => c.key === key);
+          if (!col) return true;
+          return filters[key].has(filterValueOf(col, row));
+        })
+      );
+    }
+
+    // 2) Metin araması
+    if (search.trim()) {
+      const term = search.trim().toLocaleLowerCase("tr-TR");
+      result = result.filter((row) =>
+        columns.some((c) => {
+          if (c.searchable === false) return false;
+          const v = c.accessor ? c.accessor(row) : undefined;
+          const str = v == null ? "" : v instanceof Date ? v.toISOString() : String(v);
+          return str.toLocaleLowerCase("tr-TR").includes(term);
+        })
+      );
+    }
+
+    return result;
+  }, [rows, search, columns, filters, filterValueOf]);
+
+  function toggleFilter(colKey: string, value: string) {
+    setFilters((prev) => {
+      const next = { ...prev };
+      const set = new Set(next[colKey] ?? []);
+      if (set.has(value)) set.delete(value);
+      else set.add(value);
+      if (set.size === 0) delete next[colKey];
+      else next[colKey] = set;
+      return next;
+    });
+  }
+
+  function clearFilters() {
+    setFilters({});
+  }
+
+  const activeFilterCount = Object.values(filters).reduce(
+    (acc, s) => acc + s.size,
+    0
+  );
 
   const sorted = React.useMemo(() => {
     if (!sortKey) return filtered;
@@ -218,6 +380,31 @@ export function SmartTable<T extends object>({
           </div>
         </div>
       </div>
+
+      {/* Filtre çubuğu — yalnızca filtrelenebilir kolon varsa */}
+      {filterableCols.length > 0 && (
+        <div className="flex flex-wrap items-center gap-2 px-4 py-2.5 border-b bg-background/50">
+          <ListFilter className="size-4 text-muted-foreground shrink-0" />
+          {filterableCols.map((c) => (
+            <FacetFilter
+              key={c.key}
+              label={c.header}
+              values={facetValues[c.key] ?? []}
+              selected={filters[c.key] ?? new Set()}
+              onToggle={(v) => toggleFilter(c.key, v)}
+            />
+          ))}
+          {activeFilterCount > 0 && (
+            <button
+              type="button"
+              onClick={clearFilters}
+              className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
+            >
+              <X className="size-3" /> Filtreleri temizle ({activeFilterCount})
+            </button>
+          )}
+        </div>
+      )}
 
       {/* Table */}
       <div className="overflow-x-auto">

@@ -17,12 +17,14 @@ import {
   X,
   LogOut,
   Mail,
+  Bell,
 } from "lucide-react";
 import { UniqueLogo } from "@/components/unique-logo";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { BildirimBell } from "@/components/portal-shell/bildirim-bell";
+import { GlobalSearch } from "@/components/global-search";
 import type { Bildirim } from "@/lib/repositories/bildirim";
 
 interface NavItem {
@@ -43,6 +45,7 @@ const NAV: NavItem[] = [
   { href: "/belgeler/yukle", label: "Belge Yükle", icon: Upload, group: "Yönetim", adminOnly: true },
   { href: "/ayarlar/email", label: "Mail Ayarları", icon: Mail, group: "Yönetim", adminOnly: true },
   { href: "/destek", label: "Destek Talepleri", icon: LifeBuoy, group: "Yardım" },
+  { href: "/bildirimler", label: "Bildirimler", icon: Bell, group: "Hesap" },
   { href: "/hesabim", label: "Hesabım", icon: User, group: "Hesap" },
 ];
 
@@ -88,6 +91,11 @@ function NavContent({ user, signOutAction, bildirimler, lastSeen }: Props) {
         <Link href="/ozet" className="flex items-center">
           <UniqueLogo size="md" />
         </Link>
+      </div>
+
+      {/* Global arama */}
+      <div className="px-3 pt-4">
+        <GlobalSearch variant="sidebar" />
       </div>
 
       {/* Nav */}
@@ -200,6 +208,7 @@ export function MobileTopBar({
         <UniqueLogo size="sm" />
       </Link>
       <div className="ml-auto flex items-center gap-1">
+        <GlobalSearch variant="topbar" />
         <BildirimBell
           bildirimler={bildirimler}
           lastSeen={lastSeen}
