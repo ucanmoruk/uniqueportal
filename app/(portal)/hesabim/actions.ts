@@ -8,6 +8,7 @@ import {
   updateFirma,
   updateFirmaParola,
 } from "@/lib/repositories/firma";
+import { userMessage } from "@/lib/errors";
 
 const ProfilSchema = z.object({
   Firma_Adi: z.string().min(1, "Firma adı zorunlu."),
@@ -47,8 +48,7 @@ export async function updateProfilAction(
     revalidatePath("/hesabim");
     return { ok: true };
   } catch (err) {
-    console.error("[updateProfil] hata:", err);
-    return { error: "Güncellenemedi: " + (err as Error).message };
+    return { error: userMessage(err, "Profil güncellenemedi. Lütfen tekrar deneyin.") };
   }
 }
 
@@ -94,7 +94,6 @@ export async function updateParolaAction(
     await updateFirmaParola(user.id, parsed.data.yeni);
     return { ok: true };
   } catch (err) {
-    console.error("[updateParola] hata:", err);
-    return { error: "Parola güncellenemedi: " + (err as Error).message };
+    return { error: userMessage(err, "Parola güncellenemedi. Lütfen tekrar deneyin.") };
   }
 }

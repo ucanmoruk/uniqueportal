@@ -60,6 +60,51 @@ export function fromWhatsAppAddress(waAddress: string): string {
   return waAddress.replace(/^whatsapp:/, "");
 }
 
+/**
+ * Twilio inbound webhook imza doğrulaması (X-Twilio-Signature).
+ *
+ * Twilio, isteği şu formülle imzalar:
+ *   base64( HMAC-SHA1( authToken, fullUrl + sıralı(key+value) ) )
+ *
+ * @param fullUrl  Twilio'nun çağırdığı tam URL (query string dahil)
+ * @param params   POST form alanları (key→value)
+ * @param signature  X-Twilio-Signature başlığı
+ * @returns TWILIO_AUTH_TOKEN tanımlı değilse `null` (doğrulama atlanır)
+ */
+export function verifyTwilioSignature(
+  fullUrl: string,
+  params: Record<string, string>,
+  signature: string | null
+): boolean | null {
+  const authToken = process.env.TWILIO_AUTH_TOKEN;
+  if (!authToken) return null; // yapılandırma yoksa doğrulama yapılamaz
+
+  if (!signature) return false;
+
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const crypto = require("node:crypto") as typeof import("node:crypto");
+
+  const data =
+    fullUrl +
+    Object.keys(params)
+      .sort()
+      .map((k) => k + params[k])
+      .join("");
+
+  const expected = crypto
+    .createHmac("sha1", authToken)
+    .update(Buffer.from(data, "utf-8"))
+    .digest("base64");
+
+  try {
+    const a = Buffer.from(signature);
+    const b = Buffer.from(expected);
+    return a.length === b.length && crypto.timingSafeEqual(a, b);
+  } catch {
+    return false;
+  }
+}
+
 interface SendResult {
   sent: boolean;
   sid?: string;

@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { requireUser } from "@/lib/auth";
 import { createTalep } from "@/lib/repositories/talep";
+import { userMessage } from "@/lib/errors";
 
 const NumuneSchema = z.object({
   Numune: z.string().max(250).default(""),
@@ -120,7 +121,6 @@ export async function yeniTalepAction(
     if ((err as { digest?: string })?.digest?.startsWith("NEXT_REDIRECT")) {
       throw err;
     }
-    console.error("[yeniTalepAction] hata:", err);
-    return { error: "Talep kaydedilemedi: " + (err as Error).message };
+    return { error: userMessage(err, "Talep kaydedilemedi. Lütfen tekrar deneyin.") };
   }
 }

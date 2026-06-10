@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { requireAdmin } from "@/lib/auth";
 import { saveEmailAyar } from "@/lib/repositories/email-ayar";
 import { sendEmail, verifyEmailConfig } from "@/lib/email";
+import { userMessage } from "@/lib/errors";
 
 const Schema = z.object({
   Host: z.string().min(1, "SMTP host zorunlu.").max(255),
@@ -57,7 +58,7 @@ export async function saveEmailAyarAction(
     revalidatePath("/ayarlar/email");
     return { ok: true, message: "Ayarlar kaydedildi." };
   } catch (err) {
-    return { error: "Kaydetme hatası: " + (err as Error).message };
+    return { error: userMessage(err, "Ayarlar kaydedilemedi. Lütfen tekrar deneyin.") };
   }
 }
 

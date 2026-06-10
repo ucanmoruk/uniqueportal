@@ -18,7 +18,11 @@
 import { NextResponse } from "next/server";
 import { getPool, queryOne, sql } from "@/lib/db";
 import { findFirmaByPhone } from "@/lib/repositories/firma-phone";
-import { sendText, fromWhatsAppAddress } from "@/lib/whatsapp";
+import {
+  sendText,
+  fromWhatsAppAddress,
+  verifyTwilioSignature,
+} from "@/lib/whatsapp";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -31,37 +35,48 @@ interface TwilioInbound {
   ProfileName?: string;
 }
 
-async function parseInbound(req: Request): Promise<TwilioInbound | null> {
+export async function POST(req: Request) {
+  // İsteği bir kez oku — hem imza doğrulaması hem parse için aynı gövde.
   const ct = req.headers.get("content-type") ?? "";
+  let allParams: Record<string, string> = {};
+  let inbound: TwilioInbound | null = null;
+
   if (ct.includes("application/x-www-form-urlencoded")) {
     const text = await req.text();
     const params = new URLSearchParams(text);
-    return {
+    allParams = Object.fromEntries(params.entries());
+    inbound = {
       From: params.get("From") ?? "",
       To: params.get("To") ?? "",
       Body: params.get("Body") ?? "",
       MessageSid: params.get("MessageSid") ?? "",
       ProfileName: params.get("ProfileName") ?? undefined,
     };
+  } else if (ct.includes("application/json")) {
+    inbound = (await req.json()) as TwilioInbound;
   }
-  if (ct.includes("application/json")) {
-    const j = await req.json();
-    return j as TwilioInbound;
-  }
-  return null;
-}
 
-export async function POST(req: Request) {
-  // Twilio basit X-Twilio-Signature ile doğrulanabilir; şimdilik secret ile koruma
-  const secret = process.env.WHATSAPP_WEBHOOK_SECRET;
-  if (secret) {
-    const url = new URL(req.url);
-    if (url.searchParams.get("secret") !== secret) {
-      return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  // --- Doğrulama katmanı ---
+  // 1) Twilio imzası (TWILIO_AUTH_TOKEN tanımlıysa zorunlu)
+  const sigResult = verifyTwilioSignature(
+    req.url,
+    allParams,
+    req.headers.get("x-twilio-signature")
+  );
+  if (sigResult === false) {
+    return NextResponse.json({ error: "invalid signature" }, { status: 401 });
+  }
+  // 2) İmza yapılandırılmamışsa (sigResult === null) opsiyonel secret'a düş
+  if (sigResult === null) {
+    const secret = process.env.WHATSAPP_WEBHOOK_SECRET;
+    if (secret) {
+      const url = new URL(req.url);
+      if (url.searchParams.get("secret") !== secret) {
+        return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+      }
     }
   }
 
-  const inbound = await parseInbound(req);
   if (!inbound || !inbound.From || !inbound.Body) {
     return NextResponse.json({ error: "missing fields" }, { status: 400 });
   }

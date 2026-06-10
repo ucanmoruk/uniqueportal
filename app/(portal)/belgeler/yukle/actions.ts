@@ -7,6 +7,7 @@ import {
   digestTemplate,
   type DigestItem,
 } from "@/lib/email";
+import { userMessage } from "@/lib/errors";
 
 export type UploadItemInput = {
   fileName: string;
@@ -112,8 +113,7 @@ export async function uploadBelgelerAction(
     await tx.commit();
   } catch (err) {
     await tx.rollback();
-    console.error("[uploadBelgeler] hata:", err);
-    return { error: "Kayıt sırasında hata: " + (err as Error).message };
+    return { error: userMessage(err, "Belgeler kaydedilemedi. Lütfen tekrar deneyin.") };
   }
 
   return {

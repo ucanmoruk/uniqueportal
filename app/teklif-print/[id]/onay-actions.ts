@@ -17,6 +17,7 @@ import { revalidatePath } from "next/cache";
 import { getPool, sql } from "@/lib/db";
 import { requireUser } from "@/lib/auth";
 import { isAdmin } from "@/lib/permissions";
+import { userMessage } from "@/lib/errors";
 
 interface ResultOk {
   ok: true;
@@ -153,7 +154,10 @@ async function karariYaz(
     try {
       await tx.rollback();
     } catch {}
-    return { ok: false, error: (err as Error).message };
+    return {
+      ok: false,
+      error: userMessage(err, "İşlem tamamlanamadı. Lütfen tekrar deneyin."),
+    };
   }
 
   // Cache invalidation
