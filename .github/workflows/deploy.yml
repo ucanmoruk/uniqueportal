@@ -26,11 +26,12 @@ jobs:
 
       - name: Prepare standalone package
         run: |
-          mkdir -p deploy-package
+          mkdir -p deploy-package/tmp
           cp -r .next/standalone/* deploy-package/
           cp -r .next/standalone/.next deploy-package/.next 2>/dev/null || true
           cp -r .next/static deploy-package/.next/static
           cp -r public deploy-package/public
+          echo "deploy-$(date -u +%Y%m%d%H%M%S)-${GITHUB_SHA:0:7}" > deploy-package/tmp/restart.txt
 
       - name: Deploy via FTP
         uses: SamKirkland/FTP-Deploy-Action@v4.3.5
@@ -41,3 +42,18 @@ jobs:
           local-dir: ./deploy-package/
           server-dir: ./portal.uniqueanalyse.com/
           dangerous-clean-slate: false
+
+      - name: Restart Node.js App via cPanel API
+        run: |
+          response=$(curl -sk -w "\n%{http_code}" \
+            -u "${{ secrets.CPANEL_USER }}:${{ secrets.CPANEL_PASS }}" \
+            "https://${{ secrets.FTP_HOST }}:2083/execute/Nodejs/restart_app?app_path=portal.uniqueanalyse.com")
+          http_code=$(echo "$response" | tail -1)
+          echo "cPanel API response: $http_code"
+          if [ "$http_code" = "401" ]; then
+            echo "::warning::cPanel API auth failed — restart the app manually from cPanel"
+          elif [ "$http_code" = "200" ]; then
+            echo "App restarted successfully"
+          else
+            echo "::warning::cPanel API returned $http_code — restart the app manually from cPanel"
+          fi
