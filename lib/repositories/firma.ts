@@ -28,6 +28,17 @@ export async function findFirmaByKod(kod: string): Promise<Firma | null> {
   );
 }
 
+export async function findFirmaByMail(mail: string): Promise<Firma | null> {
+  return queryOne<Firma>(
+    `SELECT TOP 1 ID, Kod, Parola, Firma_Adi, Tur, Yetkili, Plasiyer, PlasiyerID,
+            Adres, Telefon, Mail, Vergi_Dairesi, Vergi_No, Durum, Sektor,
+            Hizmet, Vade, Odeme
+     FROM Firma
+     WHERE LOWER(LTRIM(RTRIM(Mail))) = @mail AND Durum = N'Aktif'`,
+    { mail: mail.trim().toLowerCase() }
+  );
+}
+
 export async function findFirmaById(id: number): Promise<Firma | null> {
   return queryOne<Firma>(
     `SELECT TOP 1 ID, Kod, Parola, Firma_Adi, Tur, Yetkili, Plasiyer, PlasiyerID,

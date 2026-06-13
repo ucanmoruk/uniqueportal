@@ -65,11 +65,33 @@ async function fetchPdf(yol: string, dosyaAdi: string | null) {
   return null;
 }
 
+async function fetchDirectPdf(url: string) {
+  try {
+    const resp = await fetch(url, {
+      redirect: "follow",
+      headers: {
+        "User-Agent":
+          "Mozilla/5.0 (compatible; UniquePortalProxy/1.0; +https://uqtest.com)",
+        Accept: "application/pdf,application/octet-stream,*/*",
+      },
+    });
+    if (!resp.ok) return null;
+    const buf = Buffer.from(await resp.arrayBuffer());
+    if (buf.length < 5 || !buf.subarray(0, 5).toString().startsWith("%PDF-")) {
+      return null;
+    }
+    return { buf, source: url };
+  } catch {
+    return null;
+  }
+}
+
 export async function GET(
-  _req: Request,
+  req: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
+  const download = new URL(req.url).searchParams.get("download") === "1";
   const numId = Number(id);
   if (!Number.isInteger(numId)) {
     return new NextResponse("Bad request", { status: 400 });
@@ -95,7 +117,10 @@ export async function GET(
     });
   }
 
-  const result = await fetchPdf(rapor.Yol, rapor["Dosya Adı"]);
+  const isExternal = /^https?:\/\//i.test(rapor.Yol.trim());
+  const result = isExternal
+    ? await fetchDirectPdf(rapor.Yol.trim())
+    : await fetchPdf(rapor.Yol, rapor["Dosya Adı"]);
   if (!result) {
     return new NextResponse(
       "PDF dosyasına erişilemedi. Lütfen daha sonra tekrar deneyin.",
@@ -103,16 +128,22 @@ export async function GET(
     );
   }
 
-  const niceName = (rapor["Dosya Adı"] || `belge-${numId}.pdf`)
-    .replace(/[^a-zA-Z0-9._-]+/g, "_")
-    .replace(/\.+pdf$/i, ".pdf");
+  const raporNo = rapor["Dosya No"];
+  const urunAdi = rapor["Dosya Adı"] ?? "";
+  const baseName = urunAdi
+    ? `${raporNo} - ${urunAdi}`
+    : `Rapor-${raporNo}`;
+  const niceName = baseName
+    .replace(/[^a-zA-Z0-9ÇĞİÖŞÜçğıöşü._\s-]+/g, "_")
+    .trim()
+    .concat(".pdf");
 
   return new NextResponse(new Uint8Array(result.buf), {
     status: 200,
     headers: {
       "Content-Type": "application/pdf",
       "Content-Length": String(result.buf.length),
-      "Content-Disposition": `inline; filename="${niceName}"`,
+      "Content-Disposition": `${download ? "attachment" : "inline"}; filename="${niceName}"`,
       "Cache-Control": "private, max-age=300",
       "X-Content-Type-Options": "nosniff",
     },

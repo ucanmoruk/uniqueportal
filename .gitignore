@@ -40,3 +40,8 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# deploy artifacts
+/deploy/output/
+/deploy/portal-deploy.zip
+/deploy/portal-deploy.tar.gz

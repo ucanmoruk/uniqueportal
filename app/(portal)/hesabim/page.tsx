@@ -52,10 +52,6 @@ export default async function HesabimPage() {
           </CardHeader>
           <CardContent>
             <ParolaForm />
-            <p className="mt-4 text-xs text-muted-foreground">
-              ⚠️ Parolanız hâlâ düz metin olarak saklanmaktadır. Bcrypt'e
-              geçiş yakında.
-            </p>
           </CardContent>
         </Card>
       </div>

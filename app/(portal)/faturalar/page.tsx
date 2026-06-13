@@ -41,6 +41,10 @@ export default async function FaturalarPage() {
         showProje={isAdmin(user)}
         isAdmin={isAdmin(user)}
       />
+
+      <p className="mt-4 text-sm text-muted-foreground">
+        Carinizde bir yanlışlık olduğunu düşünüyorsanız lütfen müşteri temsilciniz ile iletişime geçin.
+      </p>
     </>
   );
 }

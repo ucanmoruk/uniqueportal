@@ -23,6 +23,7 @@ import {
   fromWhatsAppAddress,
   verifyTwilioSignature,
 } from "@/lib/whatsapp";
+import { generateDestekNo } from "@/lib/repositories/destek";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -142,8 +143,9 @@ export async function POST(req: Request) {
       talepId = ins.recordset[0].ID;
 
       // DESTEK header (TUR = "WA" → WhatsApp kanalı)
+      const destekNo = await generateDestekNo(tx, firma.Kod ?? "");
       await new sql.Request(tx)
-        .input("no", sql.VarChar(100), `WA${yeniNo}`)
+        .input("no", sql.VarChar(100), destekNo)
         .input("tur", sql.NVarChar(6), "WA")
         .input("konu", sql.TinyInt, 1)
         .input("baslik", sql.VarChar(255), inbound.Body.slice(0, 80))

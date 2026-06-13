@@ -83,10 +83,10 @@ export function FaturalarTable({
       ),
     },
     {
-      key: "odeme",
-      header: "Ödeme",
-      accessor: (r) => r["Ödeme"],
-      cell: (r) => <StatusBadge value={r["Ödeme"]} />,
+      key: "durum",
+      header: "Durum",
+      accessor: (r) => r.Durum,
+      cell: (r) => <StatusBadge value={r.Durum} />,
       filterable: true,
     },
     ...(isAdmin

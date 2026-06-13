@@ -113,7 +113,7 @@ function FacetFilter({
         <ChevronDown className="size-3" />
       </button>
       {open && (
-        <div className="absolute z-30 mt-1 min-w-[12rem] max-h-64 overflow-y-auto rounded-md border bg-popover text-popover-foreground shadow-lg py-1">
+        <div className="absolute z-50 mt-1 min-w-[12rem] max-h-64 overflow-y-auto rounded-md border bg-popover text-popover-foreground shadow-lg py-1">
           {values.map((v) => {
             const isSel = selected.has(v);
             return (
@@ -334,7 +334,7 @@ export function SmartTable<T extends object>({
   }, [selectedKeys]);
 
   return (
-    <div className="rounded-lg border bg-card text-card-foreground overflow-hidden shadow-sm">
+    <div className="rounded-lg border bg-card text-card-foreground shadow-sm">
       {/* Toolbar */}
       <div className="flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-between px-4 py-3 border-b bg-muted/30">
         <div className="relative w-full sm:max-w-sm">

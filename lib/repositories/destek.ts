@@ -4,6 +4,35 @@ import type { SessionUser } from "@/types/db";
 
 // isAdmin yukarıdan import edildi — listUserRelatedItems içinde kullanılır
 
+/**
+ * Firma adının ilk 2 harfi + firmaya özel sıra numarası ile destek talep no üretir.
+ * Format: #XX/DT{N}  (ör: #CO/DT1, #CO/DT2)
+ */
+export async function generateDestekNo(
+  txOrPool: import("mssql").Transaction | import("mssql").ConnectionPool,
+  firmaKodu: string
+): Promise<string> {
+  const req1 = new sql.Request(txOrPool as any);
+  req1.input("kod", sql.NVarChar(10), firmaKodu);
+  const firmaResult = await req1.query<{ Firma_Adi: string | null }>(
+    `SELECT TOP 1 Firma_Adi FROM Firma WHERE Kod = @kod`
+  );
+  const firmaAdi = firmaResult.recordset[0]?.Firma_Adi ?? "";
+  const prefix = firmaAdi
+    .replace(/[^A-Za-zÇĞİÖŞÜçğıöşü]/g, "")
+    .slice(0, 2)
+    .toUpperCase();
+
+  const req2 = new sql.Request(txOrPool as any);
+  req2.input("kod2", sql.NVarChar(10), firmaKodu);
+  const countResult = await req2.query<{ cnt: number }>(
+    `SELECT COUNT(*) AS cnt FROM DESTEK WHERE FirmaKodu = @kod2`
+  );
+  const sira = (countResult.recordset[0]?.cnt ?? 0) + 1;
+
+  return `#${prefix}/DT${sira}`;
+}
+
 export interface DestekListItem {
   ID: number;
   TALEP_ID: number;
@@ -18,15 +47,22 @@ export interface DestekListItem {
 export async function listDestek(user: SessionUser): Promise<DestekListItem[]> {
   if (isAdmin(user)) {
     return query<DestekListItem>(
-      `SELECT ID, TALEP_ID, [Talep No], Tarih, [Talep Oluşturan], Konu, Durum, FirmaKodu
-       FROM VIEW_DESTEK_TALEBI ORDER BY Tarih DESC, TALEP_ID DESC`
+      `SELECT v.ID, v.TALEP_ID, d.DESTEK_NO AS [Talep No], v.Tarih,
+              v.[Talep Oluşturan], v.Konu, v.Durum, v.FirmaKodu
+       FROM VIEW_DESTEK_TALEBI v
+       INNER JOIN DESTEK d ON d.TalepID = v.TALEP_ID
+       ORDER BY v.Tarih DESC, v.TALEP_ID DESC`
     );
   }
   const scope = scopeByFirma(user, "firmakodu");
+  const qualified = scope.clause.replace(/\b(FirmaKodu)\b/, "v.$1");
   return query<DestekListItem>(
-    `SELECT ID, TALEP_ID, [Talep No], Tarih, [Talep Oluşturan], Konu, Durum, FirmaKodu
-     FROM VIEW_DESTEK_TALEBI WHERE ${scope.clause}
-     ORDER BY Tarih DESC, TALEP_ID DESC`,
+    `SELECT v.ID, v.TALEP_ID, d.DESTEK_NO AS [Talep No], v.Tarih,
+            v.[Talep Oluşturan], v.Konu, v.Durum, v.FirmaKodu
+     FROM VIEW_DESTEK_TALEBI v
+     INNER JOIN DESTEK d ON d.TalepID = v.TALEP_ID
+     WHERE ${qualified}
+     ORDER BY v.Tarih DESC, v.TALEP_ID DESC`,
     scope.params
   );
 }
@@ -306,11 +342,12 @@ export async function createDestekTalep(
 
     // 3) DESTEK kaydı — ilgili kayıt varsa açıklamanın başına etiket gömüyoruz
     const tarih = new Date().toISOString().slice(0, 19).replace("T", " ");
+    const destekNo = await generateDestekNo(tx, user.kod ?? "");
     const aciklamaTam = data.ilgili
       ? `[İlgili: ${data.ilgili.type} ${data.ilgili.label}]\n\n${data.aciklama}`
       : data.aciklama;
     await new sql.Request(tx)
-      .input("no", sql.VarChar(100), `D${yeniNo}`)
+      .input("no", sql.VarChar(100), destekNo)
       .input("tur", sql.NVarChar(6), "Web")
       .input("konu", sql.TinyInt, 1)
       .input("baslik", sql.VarChar(255), data.baslik)

@@ -19,6 +19,7 @@ export default async function BelgelerPage() {
       <BelgelerTable
         rows={rows}
         showProje={isAdmin(user)}
+        showMusteri={user.tur !== "Müşteri"}
         isAdmin={isAdmin(user)}
       />
     </>

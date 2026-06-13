@@ -1,27 +1,22 @@
 import NextAuth from "next-auth";
 import Credentials from "next-auth/providers/credentials";
-import { findFirmaByKod } from "@/lib/repositories/firma";
+import { findFirmaByMail } from "@/lib/repositories/firma";
 import { authConfig } from "@/lib/auth.config";
 
-/**
- * Node.js runtime auth — Credentials provider MSSQL'e bağlanır.
- * Server actions, route handlers ve sayfaların kullandığı `auth()`,
- * `handlers`, `signIn`, `signOut` buradan export edilir.
- */
 export const { handlers, signIn, signOut, auth } = NextAuth({
   ...authConfig,
   providers: [
     Credentials({
       credentials: {
-        kod: { label: "Kullanıcı Kodu", type: "text" },
+        mail: { label: "E-posta", type: "email" },
         parola: { label: "Parola", type: "password" },
       },
       async authorize(credentials) {
-        const kod = (credentials?.kod as string | undefined)?.trim();
+        const mail = (credentials?.mail as string | undefined)?.trim();
         const parola = (credentials?.parola as string | undefined)?.trim();
-        if (!kod || !parola) return null;
+        if (!mail || !parola) return null;
 
-        const firma = await findFirmaByKod(kod);
+        const firma = await findFirmaByMail(mail);
         if (!firma) return null;
 
         const dbParola = (firma.Parola ?? "").trim();

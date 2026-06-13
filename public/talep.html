@@ -1,0 +1,616 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Analiz Talebi Oluştur — UNIQUE Services</title>
+<meta name="description" content="UNIQUE Services Laboratuvarı'na online analiz talebi oluşturun.">
+<link rel="icon" type="image/png" href="/favicon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+/* ── UNIQUE Design Tokens (inline) ─────────────────────────────── */
+:root{
+  --uq-brand:#463aed;
+  --uq-brand-hover:#3930c3;
+  --uq-brand-subtle:#7e95fb;
+  --uq-surface-primary:#ffffff;
+  --uq-surface-secondary:#f6f6f5;
+  --uq-surface-tertiary:#edebe9;
+  --uq-text-primary:#161519;
+  --uq-text-secondary:#585866;
+  --uq-text-tertiary:#848499;
+  --uq-text-inverse:#ffffff;
+  --uq-border-default:#d8d4cf;
+  --uq-border-subtle:#edebe9;
+  --uq-status-error:#e84e4e;
+  --uq-status-error-subtle:#ffadad;
+  --uq-status-success:#49aa50;
+  --uq-status-success-subtle:#89e58e;
+  --uq-dot-rgb:70,58,237;
+  --uq-radius:0;
+  --uq-font:'JetBrains Mono',ui-monospace,monospace;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+body{
+  font-family:var(--uq-font);
+  background:var(--uq-surface-primary);
+  color:var(--uq-text-primary);
+  min-height:100vh;
+  line-height:1.5;
+  -webkit-font-smoothing:antialiased;
+  -moz-osx-font-smoothing:grayscale;
+  letter-spacing:-0.005em;
+}
+::selection{background:color-mix(in srgb,var(--uq-brand) 22%,transparent);color:var(--uq-text-primary)}
+
+/* ── Canvas ────────────────────────────────────────────────────── */
+canvas#dots{position:fixed;inset:0;width:100%;height:100%;pointer-events:none;z-index:0}
+
+/* ── Layout ────────────────────────────────────────────────────── */
+.page{position:relative;z-index:1;max-width:640px;margin:0 auto;padding:2rem 1rem 3rem}
+.brand{text-align:center;margin-bottom:2.5rem}
+.brand-logo{max-height:48px;width:auto;margin-bottom:0.5rem}
+.brand p{font-size:0.7rem;color:var(--uq-text-tertiary);margin-top:0.25rem;letter-spacing:0.05em;text-transform:uppercase}
+
+/* ── Progress ──────────────────────────────────────────────────── */
+.step-bar{margin-bottom:2.5rem}
+.step-bar .top{display:flex;justify-content:space-between;margin-bottom:0.75rem}
+.step-bar .label{font-size:0.65rem;font-weight:600;text-transform:uppercase;letter-spacing:0.2em;color:var(--uq-text-primary)}
+.step-bar .count{font-size:0.65rem;color:var(--uq-text-tertiary);font-variant-numeric:tabular-nums;letter-spacing:0.12em}
+.track{height:3px;background:var(--uq-border-default);overflow:hidden}
+.track .fill{height:100%;background:var(--uq-brand);transition:width .5s ease}
+
+/* ── Section ───────────────────────────────────────────────────── */
+.section-title{font-size:1.5rem;font-weight:600;letter-spacing:-0.02em;line-height:1.2}
+.section-desc{font-size:0.8rem;color:var(--uq-text-secondary);margin-top:0.5rem;max-width:480px;line-height:1.6}
+
+/* ── Fields ────────────────────────────────────────────────────── */
+.fields{display:grid;grid-template-columns:1fr 1fr;gap:1.5rem;margin-top:2rem}
+.field{display:flex;flex-direction:column;gap:0.5rem}
+.field.full{grid-column:1/-1}
+.field label{font-size:0.65rem;font-weight:500;text-transform:uppercase;letter-spacing:0.1em;color:var(--uq-text-secondary)}
+.field label .req{color:var(--uq-status-error);margin-left:2px}
+.field input,.field textarea,.field select{
+  width:100%;padding:0.5rem 0.75rem;
+  font-size:0.875rem;font-family:var(--uq-font);
+  border:1px solid var(--uq-border-default);
+  border-radius:var(--uq-radius);
+  background:var(--uq-surface-primary);
+  color:var(--uq-text-primary);
+  outline:none;transition:border-color .15s ease;
+}
+.field input::placeholder,.field textarea::placeholder{color:var(--uq-text-tertiary)}
+.field input:hover,.field textarea:hover,.field select:hover{border-color:var(--uq-text-secondary)}
+.field input:focus,.field textarea:focus,.field select:focus{border-color:var(--uq-brand);box-shadow:0 0 0 2px color-mix(in srgb,var(--uq-brand) 15%,transparent)}
+.field textarea{resize:vertical;min-height:60px}
+@media(max-width:600px){.fields{grid-template-columns:1fr}}
+
+/* ── Honeypot ──────────────────────────────────────────────────── */
+.hp-field{position:absolute;left:-9999px;opacity:0;height:0;width:0;overflow:hidden;pointer-events:none;tab-index:-1}
+
+/* ── Numune ─────────────────────────────────────────────────────── */
+.numune-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem}
+.numune-label{font-size:0.6rem;font-weight:600;text-transform:uppercase;letter-spacing:0.15em;color:var(--uq-text-tertiary)}
+.btn-remove{background:none;border:none;color:var(--uq-status-error);cursor:pointer;padding:4px;font-size:0.75rem;font-family:var(--uq-font)}
+.btn-remove:hover{opacity:0.7}
+.btn-remove:disabled{opacity:0.15;cursor:not-allowed}
+.numune-divider{margin-top:1.5rem;border:none;border-top:1px solid var(--uq-border-subtle)}
+.btn-add{width:100%;padding:0.75rem;margin-top:1.5rem;border:2px dashed var(--uq-border-default);border-radius:var(--uq-radius);background:none;color:var(--uq-text-tertiary);font-size:0.8rem;font-weight:500;cursor:pointer;transition:all .15s;font-family:var(--uq-font)}
+.btn-add:hover{border-color:var(--uq-text-secondary);color:var(--uq-text-primary)}
+
+/* ── Info note ─────────────────────────────────────────────────── */
+.info-note{display:flex;align-items:flex-start;gap:0.625rem;margin-top:1.5rem;font-size:0.7rem;color:var(--uq-text-secondary);line-height:1.6}
+.info-note svg{flex-shrink:0;margin-top:2px;color:var(--uq-brand-subtle)}
+
+/* ── Sözleşme ──────────────────────────────────────────────────── */
+.sozlesme{display:flex;align-items:center;gap:0.75rem;margin-top:1.5rem}
+.sozlesme input[type=checkbox]{width:16px;height:16px;accent-color:var(--uq-brand)}
+.sozlesme label{font-size:0.8rem;color:var(--uq-text-secondary)}
+.sozlesme button{background:none;border:none;color:var(--uq-text-secondary);text-decoration:underline;text-underline-offset:3px;cursor:pointer;font-size:0.8rem;padding:0;font-family:var(--uq-font)}
+.sozlesme button:hover{color:var(--uq-text-primary)}
+
+/* ── Nav ───────────────────────────────────────────────────────── */
+.nav{display:flex;justify-content:space-between;align-items:center;margin-top:2.5rem}
+.btn{display:inline-flex;align-items:center;gap:0.5rem;padding:0.75rem 1rem;border-radius:var(--uq-radius);font-size:0.8rem;font-weight:500;cursor:pointer;transition:all .12s;border:1px solid transparent;font-family:var(--uq-font);line-height:1}
+.btn-secondary{background:var(--uq-surface-primary);border-color:var(--uq-border-default);color:var(--uq-text-secondary)}
+.btn-secondary:hover{border-color:var(--uq-text-secondary);color:var(--uq-text-primary)}
+.btn-primary{background:var(--uq-brand);color:var(--uq-text-inverse);text-transform:uppercase;letter-spacing:0.1em}
+.btn-primary:hover{background:var(--uq-brand-hover)}
+.btn-primary:disabled{opacity:0.5;cursor:not-allowed}
+
+/* ── Indicators ────────────────────────────────────────────────── */
+.indicators{display:flex;justify-content:center;gap:0.5rem;margin-top:1.5rem}
+.dot-ind{width:28px;height:28px;display:flex;align-items:center;justify-content:center;font-size:0.65rem;font-weight:600;border:1px solid var(--uq-border-default);background:var(--uq-surface-primary);color:var(--uq-text-tertiary);cursor:pointer;transition:all .15s;font-family:var(--uq-font)}
+.dot-ind.done{background:var(--uq-brand);color:var(--uq-text-inverse);border-color:var(--uq-brand)}
+.dot-ind.active{background:var(--uq-brand);color:var(--uq-text-inverse);border-color:var(--uq-brand);box-shadow:0 0 0 3px color-mix(in srgb,var(--uq-brand) 20%,transparent)}
+.dot-ind.future{background:var(--uq-surface-secondary);color:var(--uq-text-tertiary);border-color:var(--uq-border-default)}
+
+/* ── Error ─────────────────────────────────────────────────────── */
+.error-box{margin-bottom:1.5rem;padding:0.75rem 1rem;border:1px solid color-mix(in srgb,var(--uq-status-error) 30%,transparent);background:color-mix(in srgb,var(--uq-status-error) 6%,transparent);font-size:0.8rem;color:var(--uq-status-error)}
+.error-box.hidden{display:none}
+
+/* ── Modal ─────────────────────────────────────────────────────── */
+.modal-overlay{position:fixed;inset:0;z-index:100;display:flex;align-items:center;justify-content:center;padding:1rem;background:rgba(22,21,25,.45);backdrop-filter:blur(4px)}
+.modal-overlay.hidden{display:none}
+.modal{background:var(--uq-surface-primary);border:1px solid var(--uq-border-default);width:100%;max-width:640px;max-height:80vh;display:flex;flex-direction:column;overflow:hidden}
+.modal-header{display:flex;justify-content:space-between;align-items:center;padding:1rem 1.5rem;border-bottom:1px solid var(--uq-border-default)}
+.modal-header h2{font-size:0.9rem;font-weight:600}
+.modal-close{background:none;border:none;color:var(--uq-text-tertiary);cursor:pointer;padding:4px;font-size:1.1rem;font-family:var(--uq-font)}
+.modal-close:hover{color:var(--uq-text-primary)}
+.modal-body{flex:1;overflow-y:auto;padding:1.25rem 1.5rem;font-size:0.8rem;color:var(--uq-text-secondary);line-height:1.7}
+.modal-body p.bold{font-weight:600;color:var(--uq-text-primary);margin-top:1rem}
+.modal-body p.bold:first-child{margin-top:0}
+.modal-footer{padding:1rem 1.5rem;border-top:1px solid var(--uq-border-default)}
+.modal-footer .btn-primary{width:100%;justify-content:center}
+
+/* ── Success ───────────────────────────────────────────────────── */
+.success-screen{position:relative;z-index:1;min-height:100vh;display:flex;align-items:center;justify-content:center}
+.success-screen.hidden{display:none}
+.success-content{text-align:center;max-width:400px;padding:0 1.5rem}
+.success-icon{width:64px;height:64px;display:flex;align-items:center;justify-content:center;margin:0 auto 1.5rem;border:2px solid var(--uq-status-success);color:var(--uq-status-success)}
+.success-icon svg{width:32px;height:32px}
+.success-content h1{font-size:1.25rem;font-weight:600;margin-bottom:0.75rem}
+.success-content p{color:var(--uq-text-secondary);line-height:1.6;margin-bottom:2rem;font-size:0.85rem}
+.success-content .btn{width:100%;justify-content:center;margin-bottom:0.75rem}
+
+/* ── Footer ────────────────────────────────────────────────────── */
+.footer{text-align:center;margin-top:2.5rem;font-size:0.7rem;color:var(--uq-text-tertiary)}
+.footer a{color:var(--uq-text-secondary);text-decoration:underline;text-underline-offset:3px}
+.footer a:hover{color:var(--uq-text-primary)}
+
+.step-panel{display:none}
+.step-panel.active{display:block}
+</style>
+</head>
+<body>
+
+<canvas id="dots"></canvas>
+
+<!-- ==================== FORM ==================== -->
+<div class="page" id="formPage">
+  <div class="brand">
+    <img src="/unique-logo.jpeg" alt="UNIQUE Services" class="brand-logo">
+  </div>
+
+  <div class="step-bar">
+    <div class="top">
+      <span class="label" id="stepLabel">RAPORLAMA</span>
+      <span class="count" id="stepCount">01 / 03</span>
+    </div>
+    <div class="track"><div class="fill" id="progressFill" style="width:33.3%"></div></div>
+  </div>
+
+  <div class="error-box hidden" id="errorBox"></div>
+
+  <form id="talepForm" novalidate>
+    <!-- Honeypot — botlar doldurur, gerçek kullanıcılar görmez -->
+    <div class="hp-field" aria-hidden="true">
+      <label for="website">Website</label>
+      <input type="text" id="website" name="_hp" tabindex="-1" autocomplete="off">
+    </div>
+
+    <!-- Step 1 -->
+    <div class="step-panel active" data-step="0">
+      <h1 class="section-title">Raporlama Bilgileri</h1>
+      <p class="section-desc">Test raporunuz buradaki bilgilere göre hazırlanacağı için lütfen dikkatle doldurunuz.</p>
+      <div class="fields">
+        <div class="field full">
+          <label>Firma Adı <span class="req">*</span></label>
+          <input type="text" name="raporlama_Firma" required>
+        </div>
+        <div class="field full">
+          <label>Adres</label>
+          <textarea name="raporlama_Adres" rows="2"></textarea>
+        </div>
+        <div class="field">
+          <label>Yetkili</label>
+          <input type="text" name="raporlama_Yetkili">
+        </div>
+        <div class="field">
+          <label>İletişim (Tel / E-posta)</label>
+          <input type="text" name="raporlama_Iletisim">
+        </div>
+        <div class="field full">
+          <label>Rapor Gönderim E-postası</label>
+          <input type="email" name="raporlama_Mail" placeholder="rapor@firma.com">
+        </div>
+        <div class="field">
+          <label>Karar Kuralı</label>
+          <select name="raporlama_Karar">
+            <option value="Belirsizlik dahil edilmesin">Belirsizlik dahil edilmesin</option>
+            <option value="Belirsizlik pozitif yönde dahil edilsin">Belirsizlik pozitif yönde dahil edilsin</option>
+            <option value="Belirsizlik negatif yönde dahil edilsin">Belirsizlik negatif yönde dahil edilsin</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Rapor Dili</label>
+          <select name="raporlama_Dil">
+            <option value="Türkçe">Türkçe</option>
+            <option value="İngilizce">İngilizce</option>
+            <option value="Türkçe ve İngilizce">Hem Türkçe hem İngilizce</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Numune İadesi</label>
+          <select name="raporlama_Iade">
+            <option value="Hayır">Hayır</option>
+            <option value="Evet">Evet</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Üretici Firma</label>
+          <input type="text" name="raporlama_UreticiFirma">
+        </div>
+        <div class="field full">
+          <label>Not</label>
+          <textarea name="raporlama_Note" rows="2"></textarea>
+        </div>
+      </div>
+    </div>
+
+    <!-- Step 2 -->
+    <div class="step-panel" data-step="1">
+      <h1 class="section-title">Fatura Bilgileri</h1>
+      <p class="section-desc">Faturanın düzenleneceği firma bilgilerini girin.</p>
+      <div class="fields">
+        <div class="field full">
+          <label>Firma</label>
+          <input type="text" name="fatura_Firma">
+        </div>
+        <div class="field full">
+          <label>Adres</label>
+          <textarea name="fatura_Adres" rows="2"></textarea>
+        </div>
+        <div class="field">
+          <label>Vergi Dairesi</label>
+          <input type="text" name="fatura_VergiDairesi">
+        </div>
+        <div class="field">
+          <label>Vergi No</label>
+          <input type="text" name="fatura_VergiNo">
+        </div>
+        <div class="field full">
+          <label>E-posta</label>
+          <input type="email" name="fatura_Mail">
+        </div>
+      </div>
+    </div>
+
+    <!-- Step 3 -->
+    <div class="step-panel" data-step="2">
+      <h1 class="section-title">Ürün ve Analiz Bilgileri</h1>
+      <p class="section-desc">Test edilecek numune ve analiz bilgilerini girin.</p>
+      <div id="numunelerContainer"></div>
+      <button type="button" class="btn-add" onclick="addNumune()">＋ Yeni Numune Ekle</button>
+
+      <div class="info-note">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
+        <p>Analiz metodunu belirtmediğiniz durumlarda laboratuvarın uygun metodu seçmesi şartını kabul etmiş sayılırsınız.</p>
+      </div>
+
+      <div class="sozlesme">
+        <input type="checkbox" id="sozlesme" required>
+        <label for="sozlesme">
+          <button type="button" onclick="toggleModal(true)">UNIQUE hizmet sözleşmesini</button> okudum ve kabul ediyorum.
+        </label>
+      </div>
+    </div>
+
+    <!-- Navigation -->
+    <div class="nav">
+      <div>
+        <button type="button" class="btn btn-secondary" id="btnBack" style="display:none" onclick="prevStep()">← Geri</button>
+      </div>
+      <div>
+        <button type="button" class="btn btn-primary" id="btnNext" onclick="nextStep()">Devam Et →</button>
+        <button type="submit" class="btn btn-primary" id="btnSubmit" style="display:none">Talebi Oluştur</button>
+      </div>
+    </div>
+
+    <div class="indicators" id="indicators"></div>
+  </form>
+
+  <div class="footer">
+    Zaten bir hesabınız var mı? <a href="https://portal.uniqueanalyse.com/">Portala giriş yapın</a>
+  </div>
+</div>
+
+<!-- ==================== SUCCESS ==================== -->
+<div class="success-screen hidden" id="successScreen">
+  <div class="success-content">
+    <div class="success-icon">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+    </div>
+    <h1>Talebiniz Alındı</h1>
+    <p>Analiz talebiniz başarıyla oluşturuldu. Ekibimiz en kısa sürede talebinizi değerlendirecek ve sizinle iletişime geçecektir.</p>
+    <button class="btn btn-primary" onclick="location.reload()">Yeni Talep Oluştur</button>
+    <a href="https://portal.uniqueanalyse.com/" class="btn btn-secondary">Portala Giriş Yap</a>
+  </div>
+</div>
+
+<!-- ==================== SÖZLEŞME MODAL ==================== -->
+<div class="modal-overlay hidden" id="modalOverlay" onclick="if(event.target===this)toggleModal(false)">
+  <div class="modal">
+    <div class="modal-header">
+      <h2>UNIQUE Hizmet Sözleşmesi</h2>
+      <button class="modal-close" onclick="toggleModal(false)">✕</button>
+    </div>
+    <div class="modal-body">
+      <p class="bold">1. Genel Hükümler</p>
+      <p>Bu sözleşme, UNIQUE Services Laboratuvarı (bundan sonra "Laboratuvar" olarak anılacaktır) ile müşteri arasındaki hizmet ilişkisini düzenler. Müşteri, analiz talebi oluşturarak bu sözleşme şartlarını kabul etmiş sayılır.</p>
+      <p class="bold">2. Numune Kabul ve Saklama</p>
+      <p>Numuneler, laboratuvara ulaştığı andan itibaren laboratuvarın sorumluluğundadır. Numune iadesi talep edilmediği sürece, analiz tamamlandıktan sonra numuneler laboratuvar prosedürlerine uygun şekilde imha edilir. İade talep edilen numuneler, analiz sonrasında 30 gün içerisinde teslim alınmalıdır.</p>
+      <p class="bold">3. Analiz ve Raporlama</p>
+      <p>Laboratuvar, analizleri uluslararası standartlara ve akredite metotlara uygun olarak gerçekleştirir. Analiz metodunun belirtilmediği durumlarda, laboratuvar uygun metodu seçme hakkına sahiptir. Raporlar, talep edilen dilde ve formatta hazırlanır.</p>
+      <p class="bold">4. Ödeme Koşulları</p>
+      <p>Yapılacak analizlere ve hizmetlere ait ücretler, müşteri tarafından peşin olarak ödenir. Rapor, ödeme yapıldıktan sonra müşteriye gönderilir. Ödemenin yapılmaması halinde, Laboratuvar ödeme yapılıncaya kadar analiz hizmetlerine başlamama veya analiz raporunu müşteriye iletmeme hakkına sahiptir.</p>
+      <p class="bold">5. Gizlilik</p>
+      <p>Laboratuvar, müşteriye ait tüm bilgileri ve analiz sonuçlarını gizli tutar. Yasal zorunluluklar dışında üçüncü taraflarla paylaşılmaz.</p>
+      <p class="bold">6. Sorumluluk Sınırı</p>
+      <p>Laboratuvarın sorumluluğu, analiz ücretinin toplam tutarı ile sınırlıdır. Analiz sonuçlarının kullanımından doğacak dolaylı zararlardan laboratuvar sorumlu tutulamaz.</p>
+      <p class="bold">7. Uyuşmazlık</p>
+      <p>Bu sözleşmeden doğan uyuşmazlıklarda İstanbul Mahkemeleri ve İcra Daireleri yetkilidir.</p>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-primary" onclick="toggleModal(false)">Anladım, Kapat</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ─── CONFIG ───────────────────────────────────────────────────────
+// Subdomain'e deploy ederken bu URL'yi güncelleyin:
+// örn: 'https://portal.uniqueanalyse.com/api/public-talep'
+var API_URL = (function() {
+  var host = location.hostname;
+  if (host === 'localhost' || host === '127.0.0.1') return 'http://localhost:3000/api/public-talep';
+  return '/api.php';
+})();
+
+var STEPS = [
+  { label: 'RAPORLAMA' },
+  { label: 'FATURA' },
+  { label: 'NUMUNELER' },
+];
+
+var step = 0;
+var numuneCount = 0;
+
+// ─── INIT ─────────────────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', function() {
+  addNumune();
+  renderIndicators();
+  document.getElementById('talepForm').addEventListener('submit', onSubmit);
+  document.addEventListener('keydown', function(e) { if (e.key === 'Escape') toggleModal(false); });
+});
+
+// ─── STEP NAV ─────────────────────────────────────────────────────
+function goToStep(s) {
+  step = s;
+  document.querySelectorAll('.step-panel').forEach(function(p) {
+    p.classList.toggle('active', Number(p.dataset.step) === step);
+  });
+  document.getElementById('stepLabel').textContent = STEPS[step].label;
+  document.getElementById('stepCount').textContent =
+    String(step + 1).padStart(2, '0') + ' / ' + String(STEPS.length).padStart(2, '0');
+  document.getElementById('progressFill').style.width = ((step + 1) / STEPS.length * 100) + '%';
+  document.getElementById('btnBack').style.display = step > 0 ? '' : 'none';
+  document.getElementById('btnNext').style.display = step < STEPS.length - 1 ? '' : 'none';
+  document.getElementById('btnSubmit').style.display = step === STEPS.length - 1 ? '' : 'none';
+  renderIndicators();
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function nextStep() {
+  if (step === 0) {
+    var firma = document.querySelector('[name="raporlama_Firma"]').value.trim();
+    if (!firma) { showError('Firma adı zorunludur.'); return; }
+  }
+  hideError();
+  if (step < STEPS.length - 1) goToStep(step + 1);
+}
+function prevStep() { if (step > 0) goToStep(step - 1); }
+
+function renderIndicators() {
+  var c = document.getElementById('indicators');
+  c.innerHTML = '';
+  STEPS.forEach(function(_, i) {
+    var b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'dot-ind ' + (i < step ? 'done' : i === step ? 'active' : 'future');
+    b.textContent = i < step ? '✓' : String(i + 1);
+    b.onclick = function() { goToStep(i); };
+    c.appendChild(b);
+  });
+}
+
+// ─── NUMUNE ───────────────────────────────────────────────────────
+function addNumune() {
+  var idx = numuneCount++;
+  var container = document.getElementById('numunelerContainer');
+  var div = document.createElement('div');
+  div.id = 'numune-' + idx;
+  div.innerHTML =
+    (container.children.length > 0 ? '<hr class="numune-divider">' : '') +
+    '<div class="numune-header" style="margin-top:' + (container.children.length > 0 ? '1.5rem' : '1rem') + '">' +
+      '<span class="numune-label">Numune #' + (container.children.length + 1) + '</span>' +
+      '<button type="button" class="btn-remove" onclick="removeNumune(\'numune-' + idx + '\')"' + (container.children.length === 0 ? ' disabled' : '') + '>✕ Sil</button>' +
+    '</div>' +
+    '<div class="fields">' +
+      '<div class="field"><label>Numune</label><input type="text" name="numune_' + idx + '_Numune" placeholder="Örn: Krem 100ml"></div>' +
+      '<div class="field"><label>Seri/Lot No vb.</label><input type="text" name="numune_' + idx + '_Ozellik" placeholder="Seri / lot / parti no"></div>' +
+      '<div class="field"><label>Analiz</label><input type="text" name="numune_' + idx + '_Analiz" placeholder="pH, viskozite vs."></div>' +
+      '<div class="field"><label>Metot</label><input type="text" name="numune_' + idx + '_Metot" placeholder="TS EN ..."></div>' +
+    '</div>';
+  container.appendChild(div);
+  updateRemoveButtons();
+}
+
+function removeNumune(id) {
+  var el = document.getElementById(id);
+  if (el) el.remove();
+  renumberNumuneler();
+  updateRemoveButtons();
+}
+
+function renumberNumuneler() {
+  document.querySelectorAll('#numunelerContainer > div').forEach(function(div, i) {
+    var lbl = div.querySelector('.numune-label');
+    if (lbl) lbl.textContent = 'Numune #' + (i + 1);
+    var hr = div.querySelector('.numune-divider');
+    if (i === 0 && hr) hr.remove();
+  });
+}
+
+function updateRemoveButtons() {
+  var items = document.querySelectorAll('#numunelerContainer > div');
+  items.forEach(function(div) {
+    var btn = div.querySelector('.btn-remove');
+    if (btn) btn.disabled = items.length <= 1;
+  });
+}
+
+// ─── SUBMIT ───────────────────────────────────────────────────────
+function onSubmit(e) {
+  e.preventDefault();
+  hideError();
+
+  var cb = document.getElementById('sozlesme');
+  if (!cb.checked) { showError('Sözleşmeyi onaylamadan talep oluşturulamaz.'); return; }
+
+  var form = document.getElementById('talepForm');
+  var fd = new FormData(form);
+
+  var numuneler = [];
+  document.querySelectorAll('#numunelerContainer > div').forEach(function(div) {
+    var inputs = div.querySelectorAll('input[type=text]');
+    if (inputs.length >= 4) {
+      var n = { Numune: inputs[0].value, Ozellik: inputs[1].value, Analiz: inputs[2].value, Metot: inputs[3].value };
+      if (n.Numune || n.Ozellik || n.Analiz || n.Metot) numuneler.push(n);
+    }
+  });
+
+  if (numuneler.length === 0) { showError('En az bir numune bilgisi girin.'); return; }
+
+  var payload = {
+    raporlama: {
+      Firma: fd.get('raporlama_Firma') || '',
+      Adres: fd.get('raporlama_Adres') || '',
+      Yetkili: fd.get('raporlama_Yetkili') || '',
+      Iletisim: fd.get('raporlama_Iletisim') || '',
+      Karar: fd.get('raporlama_Karar') || 'Belirsizlik dahil edilmesin',
+      Dil: fd.get('raporlama_Dil') || 'Türkçe',
+      Iade: fd.get('raporlama_Iade') || 'Hayır',
+      UreticiFirma: fd.get('raporlama_UreticiFirma') || '',
+      Note: fd.get('raporlama_Note') || '',
+      Mail: fd.get('raporlama_Mail') || '',
+    },
+    fatura: {
+      Firma: fd.get('fatura_Firma') || '',
+      Adres: fd.get('fatura_Adres') || '',
+      VergiDairesi: fd.get('fatura_VergiDairesi') || '',
+      VergiNo: fd.get('fatura_VergiNo') || '',
+      Mail: fd.get('fatura_Mail') || '',
+    },
+    numuneler: numuneler,
+    _hp: fd.get('_hp') || '',
+  };
+
+  var btn = document.getElementById('btnSubmit');
+  btn.disabled = true;
+  btn.textContent = 'Kaydediliyor…';
+
+  fetch(API_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  })
+    .then(function(res) {
+      var ct = res.headers.get('content-type') || '';
+      if (ct.indexOf('application/json') === -1) {
+        throw new Error('Sunucuya ulaşılamadı. Lütfen daha sonra tekrar deneyin.');
+      }
+      return res.json().then(function(data) {
+        if (!res.ok) {
+          var msg = data.error || 'Bir hata oluştu.';
+          if (data.details && data.details.length) {
+            msg += '\n' + data.details.map(function(d) { return d.path.join('.') + ': ' + d.message; }).join('\n');
+          }
+          throw new Error(msg);
+        }
+        document.getElementById('formPage').style.display = 'none';
+        document.getElementById('successScreen').classList.remove('hidden');
+      });
+    })
+    .catch(function(err) {
+      showError(err.message);
+      btn.disabled = false;
+      btn.textContent = 'Talebi Oluştur';
+    });
+}
+
+// ─── ERROR ────────────────────────────────────────────────────────
+function showError(msg) {
+  var box = document.getElementById('errorBox');
+  box.textContent = msg;
+  box.classList.remove('hidden');
+  box.scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+function hideError() { document.getElementById('errorBox').classList.add('hidden'); }
+
+// ─── MODAL ────────────────────────────────────────────────────────
+function toggleModal(show) {
+  document.getElementById('modalOverlay').classList.toggle('hidden', !show);
+}
+
+// ─── DOT ANIMATION ───────────────────────────────────────────────
+(function() {
+  var canvas = document.getElementById('dots');
+  var ctx = canvas.getContext('2d');
+  var mx = -1000, my = -1000;
+  var overForm = false;
+  var GAP = 14, BASE_R = 0.5, MAX_R = 1.6, RANGE = 120;
+
+  var page = document.getElementById('formPage');
+  page.addEventListener('mouseenter', function() { overForm = true; });
+  page.addEventListener('mouseleave', function() { overForm = false; });
+
+  function resize() {
+    var dpr = devicePixelRatio || 1;
+    canvas.width = innerWidth * dpr;
+    canvas.height = innerHeight * dpr;
+    canvas.style.width = innerWidth + 'px';
+    canvas.style.height = innerHeight + 'px';
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  }
+
+  function draw() {
+    ctx.clearRect(0, 0, innerWidth, innerHeight);
+    var curX = overForm ? -1000 : mx;
+    var curY = overForm ? -1000 : my;
+    for (var x = GAP; x < innerWidth; x += GAP) {
+      for (var y = GAP; y < innerHeight; y += GAP) {
+        var dx = x - curX, dy = y - curY;
+        var dist = Math.sqrt(dx * dx + dy * dy);
+        var t = Math.max(0, 1 - dist / RANGE);
+        var r = BASE_R + (MAX_R - BASE_R) * t * t;
+        var alpha = 0.25 + 0.55 * t * t;
+        ctx.beginPath();
+        ctx.arc(x, y, r, 0, Math.PI * 2);
+        ctx.fillStyle = 'rgba(70,58,237,' + alpha + ')';
+        ctx.fill();
+      }
+    }
+    requestAnimationFrame(draw);
+  }
+
+  addEventListener('resize', resize);
+  addEventListener('mousemove', function(e) { mx = e.clientX; my = e.clientY; });
+  resize();
+  draw();
+})();
+</script>
+</body>
+</html>

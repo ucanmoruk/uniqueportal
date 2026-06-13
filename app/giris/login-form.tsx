@@ -21,17 +21,17 @@ export function LoginForm() {
 
       <div className="space-y-2">
         <Label
-          htmlFor="kod"
+          htmlFor="mail"
           className="text-[10px] uppercase tracking-[0.16em] text-muted-foreground"
         >
-          Firma Kodu
+          E-posta Adresi
         </Label>
         <Input
-          id="kod"
-          name="kod"
-          type="text"
-          autoComplete="username"
-          placeholder="UQ12345"
+          id="mail"
+          name="mail"
+          type="email"
+          autoComplete="email"
+          placeholder="firma@ornek.com"
           required
           autoFocus
           className="h-11"

@@ -82,11 +82,11 @@
   /* Sidebar — light variant (override on dark default) */
   --uq-sidebar-bg: var(--uq-color-neutral-100);                     /* #fefefd */
   --uq-sidebar-border: var(--uq-color-neutral-300);                 /* #edebe9 */
-  --uq-sidebar-item-text: var(--uq-color-graphite-plum-400);        /* #585866 */
-  --uq-sidebar-item-text-hover: var(--uq-color-graphite-plum-200);  /* #161519 */
+  --uq-sidebar-item-text: #000000;
+  --uq-sidebar-item-text-hover: #000000;
   --uq-sidebar-item-bg-active: var(--uq-color-signal-blue-25);      /* #e8ecff */
   --uq-sidebar-item-text-active: var(--uq-color-brand-primary);     /* #463aed */
-  --uq-sidebar-icon-default: var(--uq-color-graphite-plum-500);     /* #848499 */
+  --uq-sidebar-icon-default: #000000;
   --uq-sidebar-icon-active: var(--uq-color-brand-primary);          /* #463aed */
 
   /* Topbar — açık */

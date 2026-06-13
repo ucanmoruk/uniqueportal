@@ -6,6 +6,7 @@ import {
   getBildirimler,
   getSonGoruldu,
 } from "@/lib/repositories/bildirim";
+import { PasswordWarningBanner } from "@/components/password-warning-banner";
 
 // Bildirimler her sayfa geçişinde fresh çekilsin — Next.js layout cache'i
 // yüzünden eski payload gelmesin.
@@ -45,6 +46,7 @@ export default async function PortalLayout({
       }))}
       lastSeen={sonGoruldu ? sonGoruldu.toISOString() : null}
     >
+      <PasswordWarningBanner />
       {children}
     </SidebarShell>
   );

@@ -11,31 +11,51 @@ export interface FaturaListItem {
   Tutar: number;
   KDV: number;
   Toplam: number;
-  "Ödeme": string | null;
   Durum: string | null;
 }
+
+const FATURA_CTE = `
+WITH ranked AS (
+  SELECT *, ROW_NUMBER() OVER (
+    PARTITION BY [Fatura No]
+    ORDER BY CASE [Ödeme]
+      WHEN N'Ödendi' THEN 1
+      WHEN N'Kısmen Ödendi' THEN 2
+      WHEN N'Ödeme Bekliyor' THEN 3
+      WHEN N'Proforma Onaylandı' THEN 4
+      WHEN N'Proforma Reddedildi' THEN 5
+      WHEN N'İptal' THEN 6
+      ELSE 7
+    END
+  ) AS rn
+  FROM VIEW_FATURA
+  WHERE [Ödeme] IS NOT NULL AND [Ödeme] <> N'Fatura Kesilmedi'
+)`;
+
+const FATURA_COLS = `ID, [Fatura No], Tarih, [Müşteri], Proje, Tutar, KDV, Toplam, [Ödeme] AS Durum`;
 
 export async function listFaturalar(
   user: SessionUser
 ): Promise<FaturaListItem[]> {
   if (isAdmin(user)) {
     return query<FaturaListItem>(
-      `SELECT ID, [Fatura No], Tarih, [Müşteri], Proje, Tutar, KDV, Toplam, [Ödeme], Durum
-       FROM VIEW_FATURA ORDER BY Tarih DESC, ID DESC`
+      `${FATURA_CTE}
+       SELECT ${FATURA_COLS} FROM ranked WHERE rn = 1
+       ORDER BY Tarih DESC, ID DESC`
     );
   }
   if (user.tur === "Plasiyer") {
     return query<FaturaListItem>(
-      `SELECT ID, [Fatura No], Tarih, [Müşteri], Proje, Tutar, KDV, Toplam, [Ödeme], Durum
-       FROM VIEW_FATURA WHERE PlasiyerID = @pid
+      `${FATURA_CTE}
+       SELECT ${FATURA_COLS} FROM ranked WHERE rn = 1 AND PlasiyerID = @pid
        ORDER BY Tarih DESC, ID DESC`,
       { pid: user.plasiyerId ?? -1 }
     );
   }
   const scope = scopeByFirma(user, "musteri-proje");
   return query<FaturaListItem>(
-    `SELECT ID, [Fatura No], Tarih, [Müşteri], Proje, Tutar, KDV, Toplam, [Ödeme], Durum
-     FROM VIEW_FATURA WHERE ${scope.clause}
+    `${FATURA_CTE}
+     SELECT ${FATURA_COLS} FROM ranked WHERE rn = 1 AND ${scope.clause}
      ORDER BY Tarih DESC, ID DESC`,
     scope.params
   );

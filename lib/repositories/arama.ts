@@ -102,32 +102,76 @@ export async function aramaYap(
     /* yoksay */
   }
 
-  // ---- Raporlar (VIEW_RAPOR) ----
+  // ---- Raporlar (VIEW_RAPOR) — şu an devre dışı, migrasyon sonrası aktifleşecek ----
+  // try {
+  //   const raporFilter = isAdmin(user)
+  //     ? ""
+  //     : "AND ([Müşteri] = @firma OR Proje = @firma)";
+  //   const raporlar = await query<{
+  //     ID: number;
+  //     RaporID: string | null;
+  //     "Dosya No": number;
+  //     "Dosya Adı": string | null;
+  //     "Müşteri": string | null;
+  //   }>(
+  //     `SELECT TOP ${perSource} ID, RaporID, [Dosya No], [Dosya Adı], [Müşteri]
+  //      FROM VIEW_RAPOR
+  //      WHERE Durum = 'Aktif'
+  //        AND (RaporID LIKE @like OR [Dosya Adı] LIKE @like OR [Müşteri] LIKE @like)
+  //        ${raporFilter}
+  //      ORDER BY Tarih DESC, ID DESC`,
+  //     isAdmin(user) ? { like } : { like, firma: user.firmaAdi ?? "" }
+  //   );
+  //   for (const r of raporlar) {
+  //     sonuclar.push({
+  //       type: "rapor",
+  //       id: r.ID,
+  //       baslik: r.RaporID ?? `UQ${r["Dosya No"]}`,
+  //       altBaslik: r["Dosya Adı"] ?? r["Müşteri"],
+  //       durum: null,
+  //       link: `/belgeler`,
+  //     });
+  //   }
+  // } catch {
+  //   /* yoksay */
+  // }
+
+  // ---- NKR Raporları (Numune/Ürün adı ile arama) ----
   try {
-    const raporFilter = isAdmin(user)
+    const nkrFilter = isAdmin(user)
       ? ""
-      : "AND ([Müşteri] = @firma OR Proje = @firma)";
-    const raporlar = await query<{
-      ID: number;
-      RaporID: string | null;
-      "Dosya No": number;
-      "Dosya Adı": string | null;
-      "Müşteri": string | null;
+      : "AND n.Firma_ID = @firmaId";
+    const nkrParams: Record<string, string | number> = { like };
+    if (!isAdmin(user)) nkrParams.firmaId = user.id;
+
+    const nkrRaporlar = await query<{
+      OnayID: number;
+      RaporNo: number | null;
+      NumuneAd: string | null;
+      MusteriAd: string | null;
     }>(
-      `SELECT TOP ${perSource} ID, RaporID, [Dosya No], [Dosya Adı], [Müşteri]
-       FROM VIEW_RAPOR
-       WHERE Durum = 'Aktif'
-         AND (RaporID LIKE @like OR [Dosya Adı] LIKE @like OR [Müşteri] LIKE @like)
-         ${raporFilter}
-       ORDER BY Tarih DESC, ID DESC`,
-      isAdmin(user) ? { like } : { like, firma: user.firmaAdi ?? "" }
+      `SELECT TOP ${perSource}
+         -o.ID AS OnayID,
+         n.RaporNo,
+         n.Numune_Adi AS NumuneAd,
+         f.Firma_Adi AS MusteriAd
+       FROM cosmoroot.NKR_RaporOnay o
+       INNER JOIN dbo.NKR n ON n.ID = o.NkrID
+       LEFT JOIN dbo.Firma f ON f.ID = n.Firma_ID
+       WHERE o.YayinUrl IS NOT NULL
+         AND LTRIM(RTRIM(o.YayinUrl)) <> ''
+         AND n.Durum = N'Aktif'
+         AND (n.Numune_Adi LIKE @like OR f.Firma_Adi LIKE @like OR CAST(n.RaporNo AS varchar) LIKE @like)
+         ${nkrFilter}
+       ORDER BY o.YayinTarihi DESC, o.ID DESC`,
+      nkrParams
     );
-    for (const r of raporlar) {
+    for (const r of nkrRaporlar) {
       sonuclar.push({
         type: "rapor",
-        id: r.ID,
-        baslik: r.RaporID ?? `UQ${r["Dosya No"]}`,
-        altBaslik: r["Dosya Adı"] ?? r["Müşteri"],
+        id: r.OnayID,
+        baslik: r.RaporNo ? `UQ${r.RaporNo}` : `Rapor`,
+        altBaslik: r.NumuneAd ?? r.MusteriAd,
         durum: null,
         link: `/belgeler`,
       });

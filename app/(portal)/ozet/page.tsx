@@ -155,7 +155,7 @@ export default async function OzetPage() {
   return (
     <>
       <PageHeader
-        title={`Hoş geldiniz, ${user.firmaAdi}`}
+        title="Hoş geldiniz."
         description="Hesabınıza ait test, teklif ve cari hesap özetiniz aşağıdadır."
         actions={
           <Button asChild size="sm">
@@ -176,7 +176,7 @@ export default async function OzetPage() {
               tone="primary"
               icon={FileSpreadsheet}
               title={`${actions.bekleyenTeklif} teklif onayınızı bekliyor`}
-              desc="İncele ve onayla/redet"
+              desc="İncele ve onayla/reddet"
               href="/teklifler"
             />
           )}

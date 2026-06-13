@@ -21,25 +21,16 @@ export interface RaporListItem {
 }
 
 /**
- * Manuel yüklenen raporlar (VIEW_RAPOR) + yayınlanmış NKR raporları
- * (NKR_RaporOnay.YayinUrl) birleştirilmiş tek liste.
+ * Yayınlanmış NKR raporları (NKR_RaporOnay.YayinUrl).
+ *
+ * NOT: VIEW_RAPOR verileri şu an portalda gösterilmiyor.
+ * listManuelRaporlar() fonksiyonu ileride VIEW_RAPOR → NKR migrasyonu
+ * tamamlandığında kaldırılacak; şimdilik korunuyor.
  */
 export async function listRaporlar(
   user: SessionUser
 ): Promise<RaporListItem[]> {
-  const [manuel, yayinlanmis] = await Promise.all([
-    listManuelRaporlar(user),
-    listYayinlanmisNkrRaporlari(user),
-  ]);
-
-  const merged = [...yayinlanmis, ...manuel];
-  // Tarihe göre azalan, NULL'lar en sonda
-  merged.sort((a, b) => {
-    const ta = a.Tarih ? new Date(a.Tarih).getTime() : 0;
-    const tb = b.Tarih ? new Date(b.Tarih).getTime() : 0;
-    return tb - ta;
-  });
-  return merged;
+  return listYayinlanmisNkrRaporlari(user);
 }
 
 async function listManuelRaporlar(
@@ -150,7 +141,12 @@ async function listYayinlanmisNkrRaporlari(
   }));
 }
 
-export async function findRaporForUser(user: SessionUser, raporId: number) {
+export async function findRaporForUser(
+  user: SessionUser,
+  raporId: number
+): Promise<RaporListItem | null> {
+  if (raporId < 0) return findNkrRaporForUser(user, -raporId);
+
   const r = await queryOne<RaporListItem>(
     `SELECT TOP 1 ID, Tarih, [Dosya No], TalepNo, [Müşteri], Proje,
             [Dosya Türü], [Dosya Adı], RaporID, Yol
@@ -166,4 +162,61 @@ export async function findRaporForUser(user: SessionUser, raporId: number) {
   )
     return r;
   return null;
+}
+
+async function findNkrRaporForUser(
+  user: SessionUser,
+  onayId: number
+): Promise<RaporListItem | null> {
+  interface NkrRow {
+    OnayID: number;
+    NkrID: number;
+    Tarih: Date | null;
+    RaporNo: number | null;
+    TalepNo: number | null;
+    MusteriAd: string | null;
+    RaporFormati: string | null;
+    NumuneAd: string | null;
+    YayinUrl: string | null;
+    FirmaID: number | null;
+  }
+  const r = await queryOne<NkrRow>(
+    `SELECT TOP 1
+       o.ID AS OnayID, n.ID AS NkrID,
+       o.YayinTarihi AS Tarih,
+       n.RaporNo, TRY_CAST(n.Talep_No AS INT) AS TalepNo,
+       f.Firma_Adi AS MusteriAd,
+       o.RaporFormati,
+       n.Numune_Adi AS NumuneAd,
+       o.YayinUrl,
+       n.Firma_ID AS FirmaID
+     FROM cosmoroot.NKR_RaporOnay o
+     INNER JOIN dbo.NKR n ON n.ID = o.NkrID
+     LEFT JOIN dbo.Firma f ON f.ID = n.Firma_ID
+     WHERE o.ID = @oid
+       AND o.YayinUrl IS NOT NULL
+       AND LTRIM(RTRIM(o.YayinUrl)) <> ''
+       AND n.Durum = N'Aktif'`,
+    { oid: onayId }
+  );
+  if (!r) return null;
+
+  if (!isAdmin(user)) {
+    if (user.tur === "Müşteri" && r.FirmaID !== user.id) return null;
+    if (user.tur === "Proje" && r.FirmaID !== user.id) return null;
+    if (user.tur === "Plasiyer") return null;
+  }
+
+  return {
+    ID: -r.OnayID,
+    Tarih: r.Tarih,
+    "Dosya No": r.RaporNo ?? r.NkrID,
+    TalepNo: r.TalepNo,
+    "Müşteri": r.MusteriAd,
+    Proje: null,
+    "Dosya Türü": r.RaporFormati ?? "Rapor",
+    "Dosya Adı": r.NumuneAd,
+    RaporID: r.RaporNo != null ? `R-${r.RaporNo}` : null,
+    Yol: r.YayinUrl,
+  };
 }
