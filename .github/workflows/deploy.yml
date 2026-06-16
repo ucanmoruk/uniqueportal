@@ -51,6 +51,9 @@ jobs:
           local-dir: ./deploy-package/
           server-dir: ./home/uniqueanalyse/portal.uniqueanalyse.com/
           dangerous-clean-slate: false
+          exclude: |
+            .git*
+            .git*/**
 
       - name: Post-deploy notice
         run: |
