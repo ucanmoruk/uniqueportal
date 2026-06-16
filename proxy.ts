@@ -12,12 +12,14 @@ export default auth((req) => {
 
   const isAuthPage = pathname === "/giris";
   const isApiAuth = pathname.startsWith("/api/auth");
+  const isPublicApi = pathname.startsWith("/api/public-");
   const isPublic =
     pathname === "/" ||
     pathname.startsWith("/_next") ||
     pathname.startsWith("/favicon") ||
     pathname.startsWith("/logo") ||
-    isApiAuth;
+    isApiAuth ||
+    isPublicApi;
 
   if (isAuthPage) {
     if (isLoggedIn) {

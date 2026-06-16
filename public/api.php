@@ -3,27 +3,24 @@
  * UNIQUE Services — Public Talep API
  * talep.uniqueanalyse.com/api.php
  *
- * Gereksinimler:
- *   - PHP 7.4+
- *   - sqlsrv veya pdo_sqlsrv eklentisi
- *     cPanel'de yoksa: pdo_dblib (FreeTDS) veya odbc kullanılabilir
+ * Portaldan BAGIMSIZ. Direkt MSSQL'e yazar.
+ * Gereksinim: sqlsrv / pdo_sqlsrv / pdo_dblib (bu sunucuda VAR)
  */
 
-// ── AYARLAR ──────────────────────────────────────────────────────────
-$DB_HOST   = 'SUNUCU_IP_VEYA_ADI';      // MSSQL sunucu adresi
-$DB_PORT   = '1433';                      // Port (varsayılan 1433)
-$DB_NAME   = 'VERITABANI_ADI';           // Veritabanı adı
-$DB_USER   = 'KULLANICI';                // Kullanıcı adı
-$DB_PASS   = 'SIFRE';                    // Şifre
+// ── AYARLAR (BURAYI DOLDURUN) ────────────────────────────────────────
+$DB_HOST   = 'mssql04.trwww.com';   // MSSQL sunucu adresi
+$DB_PORT   = '1433';                 // Port
+$DB_NAME   = 'massgrup_cosmo';       // Veritabanı adı
+$DB_USER   = 'BURAYA_KULLANICI';     // Kullanıcı adı
+$DB_PASS   = 'BURAYA_SIFRE';         // Şifre
 
 $ALLOWED_ORIGINS = [
     'https://talep.uniqueanalyse.com',
-    'https://portal.uniqueanalyse.com',
     'http://localhost:3000',
 ];
 
-$RATE_LIMIT     = 5;       // Dakikada max istek
-$RATE_DIR       = __DIR__ . '/rate_tmp'; // Rate limit geçici dosyalar
+$RATE_LIMIT = 5;       // Dakikada max istek
+$RATE_DIR   = __DIR__ . '/rate_tmp';
 
 // ── CORS ─────────────────────────────────────────────────────────────
 $origin = $_SERVER['HTTP_ORIGIN'] ?? '';
@@ -45,8 +42,7 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
 
 // ── RATE LIMITING (dosya tabanlı) ────────────────────────────────────
 $ip = $_SERVER['HTTP_X_FORWARDED_FOR'] ?? $_SERVER['REMOTE_ADDR'] ?? 'unknown';
-$ip = explode(',', $ip)[0];
-$ip = trim($ip);
+$ip = trim(explode(',', $ip)[0]);
 
 if (!is_dir($RATE_DIR)) {
     @mkdir($RATE_DIR, 0700, true);
@@ -70,7 +66,6 @@ if ($rateData['count'] > $RATE_LIMIT) {
     jsonError('Çok fazla talep gönderdiniz. Lütfen bir dakika bekleyin.', 429);
 }
 
-// ── Rate limit eski dosyaları temizle (her 100 istekte 1) ────────────
 if (rand(1, 100) === 1) {
     foreach (glob($RATE_DIR . '/*.json') as $f) {
         if (filemtime($f) < $now - 120) @unlink($f);
@@ -149,17 +144,15 @@ $driver = '';
 if (extension_loaded('sqlsrv')) {
     $driver = 'sqlsrv';
     $connInfo = [
-        "Database"            => $DB_NAME,
-        "UID"                 => $DB_USER,
-        "PWD"                 => $DB_PASS,
-        "CharacterSet"        => "UTF-8",
+        "Database"               => $DB_NAME,
+        "UID"                    => $DB_USER,
+        "PWD"                    => $DB_PASS,
+        "CharacterSet"           => "UTF-8",
         "TrustServerCertificate" => true,
     ];
-    $serverStr = "$DB_HOST,$DB_PORT";
-    $conn = sqlsrv_connect($serverStr, $connInfo);
+    $conn = sqlsrv_connect("$DB_HOST,$DB_PORT", $connInfo);
     if ($conn === false) {
-        $e = sqlsrv_errors();
-        error_log("[public-talep] sqlsrv bağlantı hatası: " . json_encode($e));
+        error_log("[public-talep] sqlsrv bağlantı hatası: " . json_encode(sqlsrv_errors()));
         jsonError('Veritabanına bağlanılamadı.', 500);
     }
 } elseif (extension_loaded('pdo_sqlsrv')) {
@@ -182,16 +175,8 @@ if (extension_loaded('sqlsrv')) {
         error_log("[public-talep] pdo_dblib bağlantı hatası: " . $ex->getMessage());
         jsonError('Veritabanına bağlanılamadı.', 500);
     }
-} elseif (extension_loaded('odbc')) {
-    $driver = 'odbc';
-    $odbcDsn = "Driver={ODBC Driver 17 for SQL Server};Server=$DB_HOST,$DB_PORT;Database=$DB_NAME;";
-    $conn = @odbc_connect($odbcDsn, $DB_USER, $DB_PASS);
-    if (!$conn) {
-        error_log("[public-talep] ODBC bağlantı hatası: " . odbc_errormsg());
-        jsonError('Veritabanına bağlanılamadı.', 500);
-    }
 } else {
-    jsonError('Sunucuda MSSQL sürücüsü bulunamadı. (sqlsrv, pdo_sqlsrv, pdo_dblib veya odbc gerekli)', 500);
+    jsonError('Sunucuda MSSQL sürücüsü bulunamadı.', 500);
 }
 
 // ── INSERT ───────────────────────────────────────────────────────────
@@ -200,12 +185,9 @@ try {
     if ($driver === 'pdo_sqlsrv' || $driver === 'pdo_dblib') {
         $conn->beginTransaction();
 
-        // Sonraki TalepNo
         $stmt = $conn->query("SELECT TOP 1 TalepNo FROM Talep ORDER BY ID DESC");
-        $lastNo = (int)($stmt->fetchColumn() ?: 0);
-        $yeniNo = $lastNo + 1;
+        $yeniNo = (int)($stmt->fetchColumn() ?: 0) + 1;
 
-        // Dış talep kodu
         $disKod = generateDisTalepKodu();
         for ($i = 0; $i < 5; $i++) {
             $chk = $conn->prepare("SELECT COUNT(*) FROM Talep WHERE DisTalepKodu = ?");
@@ -214,7 +196,6 @@ try {
             $disKod = generateDisTalepKodu();
         }
 
-        // Talep INSERT
         $stmt = $conn->prepare(
             "INSERT INTO Talep (Tarih, FirmaKodu, Sozlesme, Durum, TalepNo, DisTalepKodu, Yetkili, Tur, Olusturan)
              OUTPUT INSERTED.ID
@@ -223,44 +204,28 @@ try {
         $stmt->execute([$yeniNo, $disKod]);
         $talepId = (int)$stmt->fetchColumn();
 
-        // TalepRaporlama INSERT
         $cols = "TalepID, Firma, Adres, Yetkili, Iletisim, Karar, Dil, Iade, UreticiFirma, Note";
         $vals = "?, ?, ?, ?, ?, ?, ?, ?, ?, ?";
         $params = [
             $talepId,
-            s($rap, 'Firma'),
-            s($rap, 'Adres'),
-            s($rap, 'Yetkili'),
-            s($rap, 'Iletisim'),
-            s($rap, 'Karar', 'Belirsizlik dahil edilmesin'),
-            s($rap, 'Dil', 'Türkçe'),
-            s($rap, 'Iade', 'Hayır'),
-            s($rap, 'UreticiFirma'),
-            s($rap, 'Note'),
+            s($rap, 'Firma'), s($rap, 'Adres'), s($rap, 'Yetkili'),
+            s($rap, 'Iletisim'), s($rap, 'Karar', 'Belirsizlik dahil edilmesin'),
+            s($rap, 'Dil', 'Türkçe'), s($rap, 'Iade', 'Hayır'),
+            s($rap, 'UreticiFirma'), s($rap, 'Note'),
         ];
-        if ($rapMail !== '') {
-            $cols .= ", Mail";
-            $vals .= ", ?";
-            $params[] = $rapMail;
-        }
+        if ($rapMail !== '') { $cols .= ", Mail"; $vals .= ", ?"; $params[] = $rapMail; }
         $stmt = $conn->prepare("INSERT INTO TalepRaporlama ($cols) VALUES ($vals)");
         $stmt->execute($params);
 
-        // TalepFatura INSERT
         $stmt = $conn->prepare(
             "INSERT INTO TalepFatura (TalepID, Firma, Adres, VergiDairesi, VergiNo, Mail)
              VALUES (?, ?, ?, ?, ?, ?)"
         );
         $stmt->execute([
-            $talepId,
-            s($fat, 'Firma'),
-            s($fat, 'Adres'),
-            s($fat, 'VergiDairesi'),
-            s($fat, 'VergiNo'),
-            s($fat, 'Mail'),
+            $talepId, s($fat, 'Firma'), s($fat, 'Adres'),
+            s($fat, 'VergiDairesi'), s($fat, 'VergiNo'), s($fat, 'Mail'),
         ]);
 
-        // TalepNumune INSERT
         foreach ($num as $n) {
             $numune = trim($n['Numune'] ?? '');
             $analiz = trim($n['Analiz'] ?? '');
@@ -270,11 +235,8 @@ try {
                  VALUES (?, ?, ?, ?, ?)"
             );
             $stmt->execute([
-                $talepId,
-                $n['Numune'] ?? '',
-                $n['Ozellik'] ?? '',
-                $n['Analiz'] ?? '',
-                $n['Metot'] ?? '',
+                $talepId, $n['Numune'] ?? '', $n['Ozellik'] ?? '',
+                $n['Analiz'] ?? '', $n['Metot'] ?? '',
             ]);
         }
 
@@ -305,33 +267,31 @@ try {
              VALUES (GETDATE(), 'YENI', 1, N'Yeni Talep', ?, ?, 0, N'Analiz', 0)",
             [$yeniNo, $disKod]
         );
+        if ($stmt === false) throw new Exception(json_encode(sqlsrv_errors()));
         $row = sqlsrv_fetch_array($stmt, SQLSRV_FETCH_NUMERIC);
         $talepId = (int)$row[0];
         sqlsrv_free_stmt($stmt);
 
         $rapParams = [
-            $talepId,
-            s($rap, 'Firma'), s($rap, 'Adres'), s($rap, 'Yetkili'),
+            $talepId, s($rap, 'Firma'), s($rap, 'Adres'), s($rap, 'Yetkili'),
             s($rap, 'Iletisim'), s($rap, 'Karar', 'Belirsizlik dahil edilmesin'),
             s($rap, 'Dil', 'Türkçe'), s($rap, 'Iade', 'Hayır'),
             s($rap, 'UreticiFirma'), s($rap, 'Note'),
         ];
         $rapCols = "TalepID, Firma, Adres, Yetkili, Iletisim, Karar, Dil, Iade, UreticiFirma, Note";
         $rapVals = "?, ?, ?, ?, ?, ?, ?, ?, ?, ?";
-        if ($rapMail !== '') {
-            $rapCols .= ", Mail";
-            $rapVals .= ", ?";
-            $rapParams[] = $rapMail;
-        }
+        if ($rapMail !== '') { $rapCols .= ", Mail"; $rapVals .= ", ?"; $rapParams[] = $rapMail; }
         $stmt = sqlsrv_query($conn, "INSERT INTO TalepRaporlama ($rapCols) VALUES ($rapVals)", $rapParams);
-        if ($stmt !== false) sqlsrv_free_stmt($stmt);
+        if ($stmt === false) throw new Exception(json_encode(sqlsrv_errors()));
+        sqlsrv_free_stmt($stmt);
 
         $stmt = sqlsrv_query($conn,
             "INSERT INTO TalepFatura (TalepID, Firma, Adres, VergiDairesi, VergiNo, Mail)
              VALUES (?, ?, ?, ?, ?, ?)",
             [$talepId, s($fat,'Firma'), s($fat,'Adres'), s($fat,'VergiDairesi'), s($fat,'VergiNo'), s($fat,'Mail')]
         );
-        if ($stmt !== false) sqlsrv_free_stmt($stmt);
+        if ($stmt === false) throw new Exception(json_encode(sqlsrv_errors()));
+        sqlsrv_free_stmt($stmt);
 
         foreach ($num as $n) {
             $numune = trim($n['Numune'] ?? '');
@@ -342,76 +302,19 @@ try {
                  VALUES (?, ?, ?, ?, ?)",
                 [$talepId, $n['Numune']??'', $n['Ozellik']??'', $n['Analiz']??'', $n['Metot']??'']
             );
-            if ($stmt !== false) sqlsrv_free_stmt($stmt);
+            if ($stmt === false) throw new Exception(json_encode(sqlsrv_errors()));
+            sqlsrv_free_stmt($stmt);
         }
 
         sqlsrv_commit($conn);
         echo json_encode(['success' => true, 'id' => $talepId]);
-
-    // ODBC sürücüsü
-    } elseif ($driver === 'odbc') {
-        odbc_autocommit($conn, false);
-
-        $stmt = odbc_exec($conn, "SELECT TOP 1 TalepNo FROM Talep ORDER BY ID DESC");
-        $yeniNo = (int)(odbc_result($stmt, 1) ?: 0) + 1;
-        odbc_free_result($stmt);
-
-        $disKod = generateDisTalepKodu();
-
-        $stmt = odbc_prepare($conn,
-            "INSERT INTO Talep (Tarih, FirmaKodu, Sozlesme, Durum, TalepNo, DisTalepKodu, Yetkili, Tur, Olusturan)
-             VALUES (GETDATE(), 'YENI', 1, N'Yeni Talep', ?, ?, 0, N'Analiz', 0)"
-        );
-        odbc_execute($stmt, [$yeniNo, $disKod]);
-        odbc_free_result($stmt);
-
-        $stmt = odbc_exec($conn, "SELECT SCOPE_IDENTITY() AS ID");
-        $talepId = (int)odbc_result($stmt, 1);
-        odbc_free_result($stmt);
-
-        $rapSQL = "INSERT INTO TalepRaporlama (TalepID, Firma, Adres, Yetkili, Iletisim, Karar, Dil, Iade, UreticiFirma, Note"
-            . ($rapMail !== '' ? ", Mail" : "") . ") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?"
-            . ($rapMail !== '' ? ", ?" : "") . ")";
-        $rapP = [
-            $talepId, s($rap,'Firma'), s($rap,'Adres'), s($rap,'Yetkili'),
-            s($rap,'Iletisim'), s($rap,'Karar','Belirsizlik dahil edilmesin'),
-            s($rap,'Dil','Türkçe'), s($rap,'Iade','Hayır'),
-            s($rap,'UreticiFirma'), s($rap,'Note'),
-        ];
-        if ($rapMail !== '') $rapP[] = $rapMail;
-        $stmt = odbc_prepare($conn, $rapSQL);
-        odbc_execute($stmt, $rapP);
-        odbc_free_result($stmt);
-
-        $stmt = odbc_prepare($conn,
-            "INSERT INTO TalepFatura (TalepID, Firma, Adres, VergiDairesi, VergiNo, Mail) VALUES (?, ?, ?, ?, ?, ?)"
-        );
-        odbc_execute($stmt, [$talepId, s($fat,'Firma'), s($fat,'Adres'), s($fat,'VergiDairesi'), s($fat,'VergiNo'), s($fat,'Mail')]);
-        odbc_free_result($stmt);
-
-        foreach ($num as $n) {
-            $numune = trim($n['Numune'] ?? '');
-            $analiz = trim($n['Analiz'] ?? '');
-            if ($numune === '' && $analiz === '') continue;
-            $stmt = odbc_prepare($conn,
-                "INSERT INTO TalepNumune (TalepID, Numune, Ozellik, Analiz, Metot) VALUES (?, ?, ?, ?, ?)"
-            );
-            odbc_execute($stmt, [$talepId, $n['Numune']??'', $n['Ozellik']??'', $n['Analiz']??'', $n['Metot']??'']);
-            odbc_free_result($stmt);
-        }
-
-        odbc_commit($conn);
-        echo json_encode(['success' => true, 'id' => $talepId]);
     }
 
 } catch (Exception $ex) {
-    // Rollback
     if ($driver === 'pdo_sqlsrv' || $driver === 'pdo_dblib') {
         try { $conn->rollBack(); } catch (Exception $ignore) {}
     } elseif ($driver === 'sqlsrv') {
         sqlsrv_rollback($conn);
-    } elseif ($driver === 'odbc') {
-        odbc_rollback($conn);
     }
     error_log("[public-talep] INSERT hatası: " . $ex->getMessage());
     jsonError('Talep kaydedilemedi. Lütfen tekrar deneyin.', 500);

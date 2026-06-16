@@ -31,7 +31,16 @@ jobs:
           cp -r .next/standalone/.next deploy-package/.next 2>/dev/null || true
           cp -r .next/static deploy-package/.next/static
           cp -r public deploy-package/public
-          cp deploy/restart-webhook.php deploy-package/restart-webhook.php
+
+          # Shared hosting icin server.js optimizasyonu:
+          # cpus degerini 2'ye dusur (CloudLinux thread limitleri)
+          sed -i 's/"cpus":[0-9]*/"cpus":2/g' deploy-package/server.js
+          # imgOptConcurrency null ise 1 yap
+          sed -i 's/"imgOptConcurrency":null/"imgOptConcurrency":1/g' deploy-package/server.js
+          # staticGenerationMaxConcurrency dusur
+          sed -i 's/"staticGenerationMaxConcurrency":[0-9]*/"staticGenerationMaxConcurrency":2/g' deploy-package/server.js
+          # preloadEntriesOnStart kapat (startup sirasinda fazla process acmasin)
+          sed -i 's/"preloadEntriesOnStart":true/"preloadEntriesOnStart":false/g' deploy-package/server.js
 
       - name: Deploy via FTP
         uses: SamKirkland/FTP-Deploy-Action@v4.3.5
@@ -43,16 +52,8 @@ jobs:
           server-dir: ./portal.uniqueanalyse.com/
           dangerous-clean-slate: false
 
-      - name: Restart App
+      - name: Post-deploy notice
         run: |
-          response=$(curl -sk -X POST \
-            "https://portal.uniqueanalyse.com/restart-webhook.php?key=${{ secrets.RESTART_SECRET }}" \
-            -d "commit=${GITHUB_SHA:0:7}" \
-            -w "\nHTTP_CODE:%{http_code}" 2>&1)
-          http_code=$(echo "$response" | grep "HTTP_CODE:" | cut -d: -f2)
-          body=$(echo "$response" | grep -v "HTTP_CODE:")
-          echo "Response: $body"
-          echo "HTTP Code: $http_code"
-          if [ "$http_code" != "200" ]; then
-            echo "::warning::Auto-restart failed (HTTP $http_code). Restart manually from cPanel."
-          fi
+          echo "✅ Dosyalar deploy edildi."
+          echo "⚠️  cPanel > Setup Node.js App > RESTART butonuna basın."
+          echo "   (Shared hosting'te otomatik restart desteklenmiyor)"

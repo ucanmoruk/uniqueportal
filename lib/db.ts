@@ -19,9 +19,9 @@ function buildConfig(): MSSQLConfig {
       enableArithAbort: true,
     },
     pool: {
-      max: 10,
+      max: 3,
       min: 0,
-      idleTimeoutMillis: 30000,
+      idleTimeoutMillis: 15000,
     },
     requestTimeout: 30000,
   };

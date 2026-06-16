@@ -116,15 +116,39 @@ export async function getDestekDetail(
     return { header: null, mesajlar: [] };
   }
 
-  const mesajlar = await query<DestekMesaj>(
+  const rawMesajlar = await query<DestekMesaj & { GonderenKod: string | null }>(
     `SELECT dd.DETAY_ID, dd.DESTEK_REF, dd.MESAJ, dd.MESAJ_TARIHI, dd.KAYIT_EDEN,
-            dd.DETAY_DOSYA, f.Firma_Adi AS GonderenFirma, f.Tur AS GonderenTur
+            dd.DETAY_DOSYA, f.Firma_Adi AS GonderenFirma, f.Tur AS GonderenTur,
+            f.Kod AS GonderenKod
      FROM DESTEK_DETAY dd
      LEFT JOIN Firma f ON f.ID = dd.KAYIT_EDEN
      WHERE dd.DESTEK_REF = @id
      ORDER BY dd.DETAY_ID ASC`,
     { id: talepId }
   );
+
+  const musteriKodu = (header.FirmaKodu ?? "").trim();
+  const mesajlar: DestekMesaj[] = rawMesajlar.map((m) => {
+    const rawTur = (m.GonderenTur ?? "").trim();
+    const senderKod = (m.GonderenKod ?? "").trim();
+    const isMusteri =
+      rawTur !== "Admin" &&
+      rawTur !== "Plasiyer" &&
+      musteriKodu.length > 0 &&
+      senderKod === musteriKodu;
+    return {
+      DETAY_ID: m.DETAY_ID,
+      DESTEK_REF: m.DESTEK_REF,
+      MESAJ: m.MESAJ,
+      MESAJ_TARIHI: m.MESAJ_TARIHI,
+      KAYIT_EDEN: m.KAYIT_EDEN,
+      DETAY_DOSYA: m.DETAY_DOSYA,
+      GonderenFirma: isMusteri
+        ? (m.GonderenFirma ?? header.KayitEdenFirma ?? "Müşteri")
+        : "UNIQUE Services",
+      GonderenTur: isMusteri ? "musteri" : "admin",
+    };
+  });
 
   return { header, mesajlar };
 }
