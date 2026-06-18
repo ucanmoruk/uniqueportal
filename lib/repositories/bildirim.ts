@@ -1,4 +1,4 @@
-import { query, queryOne } from "@/lib/db";
+import { query, queryOne } from "@/lib/db-mysql";
 import { isAdmin } from "@/lib/permissions";
 import type { SessionUser } from "@/types/db";
 
@@ -26,14 +26,10 @@ let __tableEnsured = false;
 async function ensureTable(): Promise<void> {
   if (__tableEnsured) return;
   await query(
-    `IF NOT EXISTS (
-       SELECT 1 FROM INFORMATION_SCHEMA.TABLES
-       WHERE TABLE_NAME = 'BildirimOkuma'
-     )
-     CREATE TABLE BildirimOkuma (
-       FirmaID int NOT NULL PRIMARY KEY,
-       SonGoruldu datetime NOT NULL CONSTRAINT DF_BildirimOkuma_SonGoruldu DEFAULT GETDATE()
-     )`
+    `CREATE TABLE IF NOT EXISTS BildirimOkuma (
+       FirmaID INT NOT NULL PRIMARY KEY,
+       SonGoruldu DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_turkish_ci`
   );
   __tableEnsured = true;
 }
@@ -78,10 +74,6 @@ interface DestekYanitEvent {
   GonderenAdi: string | null;
 }
 
-/**
- * Son N gündeki yeni rapor / teklif / fatura olaylarını getir.
- * Olaylar yalnızca kullanıcının firmasıyla ilişkili kayıtlardan toplanır.
- */
 export async function getBildirimler(
   user: SessionUser,
   sinceDays = 30
@@ -89,37 +81,41 @@ export async function getBildirimler(
   const since = new Date();
   since.setDate(since.getDate() - sinceDays);
 
-  // ---- Raporlar (yüklenen test raporları) ----
+  // ---- Raporlar ----
   let raporRows: RaporEvent[] = [];
   if (isAdmin(user)) {
     raporRows = await query<RaporEvent>(
-      `SELECT TOP 50 ID, RaporID, RaporNo, NumuneAd, Tarih
+      `SELECT ID, RaporID, RaporNo, NumuneAd, Tarih
        FROM Rapor
        WHERE Durum = 'Aktif' AND Tarih >= @since
-       ORDER BY Tarih DESC, ID DESC`,
+       ORDER BY Tarih DESC, ID DESC
+       LIMIT 50`,
       { since }
     );
   } else if (user.firmaAdi) {
     raporRows = await query<RaporEvent>(
-      `SELECT TOP 50 ID, RaporID, RaporNo, NumuneAd, Tarih
+      `SELECT ID, RaporID, RaporNo, NumuneAd, Tarih
        FROM Rapor
        WHERE Durum = 'Aktif' AND Tarih >= @since
          AND (FirmaAd = @firma OR Proje = @firma)
-       ORDER BY Tarih DESC, ID DESC`,
+       ORDER BY Tarih DESC, ID DESC
+       LIMIT 50`,
       { since, firma: user.firmaAdi }
     );
   }
 
-  // ---- Teklifler (yalnızca "gönderilmiş" olanlar — taslak gizli) ----
-  // Numara DisTeklifKodu/RevNo formatında üretilir.
+  // ---- Teklifler ----
   const TEKLIF_BASE_SELECT = `
-    SELECT TOP 30
+    SELECT
       tb.ID,
-      COALESCE(tb.DisTeklifKodu, CONCAT('UQ', CAST(tb.TeklifNo AS varchar)))
-        + '/' + RIGHT('00' + CAST(tb.RevNo AS varchar), 2) AS TeklifNoText,
+      CONCAT(
+        COALESCE(tb.DisTeklifKodu, CONCAT('UQ', tb.TeklifNo)),
+        '/',
+        LPAD(tb.RevNo, 2, '0')
+      ) AS TeklifNoText,
       tb.TeklifKonusu,
       tb.Tarih
-    FROM cosmoroot.TeklifBaslik tb`;
+    FROM TeklifBaslik tb`;
   const TEKLIF_BASE_WHERE = `
       tb.Durum = 'Aktif'
       AND (tb.TeklifDurum IS NULL OR tb.TeklifDurum NOT IN ('Taslak','Hazırlanıyor','Hazirlaniyor','Draft'))
@@ -130,16 +126,17 @@ export async function getBildirimler(
     teklifRows = await query<TeklifEvent>(
       `${TEKLIF_BASE_SELECT}
        WHERE ${TEKLIF_BASE_WHERE}
-       ORDER BY tb.Tarih DESC, tb.ID DESC`,
+       ORDER BY tb.Tarih DESC, tb.ID DESC
+       LIMIT 30`,
       { since }
     );
   } else {
-    // Müşteri/Proje: kendi firmasına kesilen teklifler.
     teklifRows = await query<TeklifEvent>(
       `${TEKLIF_BASE_SELECT}
        WHERE ${TEKLIF_BASE_WHERE}
          AND tb.MusteriID = @firmaId
-       ORDER BY tb.Tarih DESC, tb.ID DESC`,
+       ORDER BY tb.Tarih DESC, tb.ID DESC
+       LIMIT 30`,
       { since, firmaId: user.id }
     );
   }
@@ -148,19 +145,21 @@ export async function getBildirimler(
   let faturaRows: FaturaEvent[] = [];
   if (isAdmin(user)) {
     faturaRows = await query<FaturaEvent>(
-      `SELECT TOP 30 ID, Fatura_No, Toplam AS Tutar, Tarih
+      `SELECT ID, Fatura_No, Toplam AS Tutar, Tarih
        FROM Fatura
        WHERE Tarih >= @since
-       ORDER BY Tarih DESC, ID DESC`,
+       ORDER BY Tarih DESC, ID DESC
+       LIMIT 30`,
       { since }
     );
   } else {
     faturaRows = await query<FaturaEvent>(
-      `SELECT TOP 30 ID, Fatura_No, Toplam AS Tutar, Tarih
+      `SELECT ID, Fatura_No, Toplam AS Tutar, Tarih
        FROM Fatura
        WHERE Tarih >= @since
          AND (FaturaFirmaID = @firmaId OR Proje_ID = @firmaId)
-       ORDER BY Tarih DESC, ID DESC`,
+       ORDER BY Tarih DESC, ID DESC
+       LIMIT 30`,
       { since, firmaId: user.id }
     );
   }
@@ -207,9 +206,6 @@ export async function getBildirimler(
   }
 
   // ---- Talep durum değişiklikleri ----
-  // DB tetikleyici (TR_TalepDurumLog) Talep.Durum her değiştiğinde
-  // dbo.TalepDurumLog'a satır yazar. Burada müşterinin kendi talepleri
-  // için son N gündeki değişimleri okuyoruz.
   interface TalepDurumEvent {
     LogID: number;
     TalepID: number;
@@ -221,31 +217,33 @@ export async function getBildirimler(
   let durumRows: TalepDurumEvent[] = [];
   if (isAdmin(user)) {
     durumRows = await query<TalepDurumEvent>(
-      `SELECT TOP 50
+      `SELECT
           l.ID AS LogID, l.TalepID, l.EskiDurum, l.YeniDurum, l.Tarih,
-          COALESCE(t.DisTalepKodu, CONCAT('UQ', CAST(t.TalepNo AS varchar))) AS TalepNoText
-       FROM dbo.TalepDurumLog l
-       INNER JOIN dbo.Talep t ON t.ID = l.TalepID
+          COALESCE(t.DisTalepKodu, CONCAT('UQ', t.TalepNo)) AS TalepNoText
+       FROM TalepDurumLog l
+       INNER JOIN Talep t ON t.ID = l.TalepID
        WHERE l.Tarih >= @since
-         AND l.YeniDurum <> N'Pasif'
-         AND t.Durum <> N'Pasif'
-         AND (t.Tur IS NULL OR t.Tur <> N'Destek')
-       ORDER BY l.Tarih DESC, l.ID DESC`,
+         AND l.YeniDurum <> 'Pasif'
+         AND t.Durum <> 'Pasif'
+         AND (t.Tur IS NULL OR t.Tur <> 'Destek')
+       ORDER BY l.Tarih DESC, l.ID DESC
+       LIMIT 50`,
       { since }
     );
   } else if (user.kod) {
     durumRows = await query<TalepDurumEvent>(
-      `SELECT TOP 50
+      `SELECT
           l.ID AS LogID, l.TalepID, l.EskiDurum, l.YeniDurum, l.Tarih,
-          COALESCE(t.DisTalepKodu, CONCAT('UQ', CAST(t.TalepNo AS varchar))) AS TalepNoText
-       FROM dbo.TalepDurumLog l
-       INNER JOIN dbo.Talep t ON t.ID = l.TalepID
+          COALESCE(t.DisTalepKodu, CONCAT('UQ', t.TalepNo)) AS TalepNoText
+       FROM TalepDurumLog l
+       INNER JOIN Talep t ON t.ID = l.TalepID
        WHERE l.Tarih >= @since
-         AND l.YeniDurum <> N'Pasif'
-         AND t.Durum <> N'Pasif'
-         AND (t.Tur IS NULL OR t.Tur <> N'Destek')
+         AND l.YeniDurum <> 'Pasif'
+         AND t.Durum <> 'Pasif'
+         AND (t.Tur IS NULL OR t.Tur <> 'Destek')
          AND t.FirmaKodu = @kod
-       ORDER BY l.Tarih DESC, l.ID DESC`,
+       ORDER BY l.Tarih DESC, l.ID DESC
+       LIMIT 50`,
       { since, kod: user.kod }
     );
   }
@@ -253,10 +251,6 @@ export async function getBildirimler(
   for (const d of durumRows) {
     const yeni = d.YeniDurum ?? "—";
     const eski = d.EskiDurum;
-    // Bazı durum geçişlerinde müşteriyi doğrudan ilgili modüle yönlendir:
-    //  - "Analiz Aşamasında" → /termin (Termin Takibi)
-    //  - "Raporlandı"        → /belgeler (Belgelerim)
-    //  - Diğer durumlar      → /talepler/[id] detayı
     const yeniNorm = yeni.trim().toLocaleLowerCase("tr-TR");
     let link = `/talepler/${d.TalepID}`;
     if (yeniNorm === "analiz aşamasında" || yeniNorm === "analiz asamasinda") {
@@ -277,7 +271,7 @@ export async function getBildirimler(
     });
   }
 
-  // ---- NKR rapor yayını → "Raporunuz yayınlandı" ----
+  // ---- NKR rapor yayını ----
   interface RaporYayinEvent {
     OnayID: number;
     NkrID: number;
@@ -293,17 +287,18 @@ export async function getBildirimler(
     if (!isAdmin(user)) params.firmaId = user.id;
 
     yayinRows = await query<RaporYayinEvent>(
-      `SELECT TOP 50
+      `SELECT
           o.ID AS OnayID, o.NkrID, n.RaporNo, n.Numune_Adi AS NumuneAd,
           o.RaporFormati, o.YayinTarihi AS Tarih
-       FROM cosmoroot.NKR_RaporOnay o
-       INNER JOIN dbo.NKR n ON n.ID = o.NkrID
+       FROM NKR_RaporOnay o
+       INNER JOIN NKR n ON n.ID = o.NkrID
        WHERE o.YayinTarihi >= @since
          AND o.YayinUrl IS NOT NULL
-         AND LTRIM(RTRIM(o.YayinUrl)) <> ''
-         AND n.Durum = N'Aktif'
+         AND TRIM(o.YayinUrl) <> ''
+         AND n.Durum = 'Aktif'
          ${firmaFilter}
-       ORDER BY o.YayinTarihi DESC, o.ID DESC`,
+       ORDER BY o.YayinTarihi DESC, o.ID DESC
+       LIMIT 50`,
       params
     );
   }
@@ -320,12 +315,7 @@ export async function getBildirimler(
     });
   }
 
-  // ---- Numune durumu — "Kabul Bekliyor" ve "Analiz Aşamasında" ----
-  // İki ayrı sinyal:
-  //   1) NKR.Tarih → numune kaydı → "Numunenizin kayıt aşamasında"
-  //   2) NKR_LabKabul satırının oluşması → o (BolumID, RaporFormati) için
-  //      analizler "Analiz aşamasında"ya geçer → bildirim.
-  // Rapor_Durumu 'Raporlandı' olanlar tamamen filtrelenir.
+  // ---- Numune durumu ----
   interface NumuneKabulEvent {
     NkrID: number;
     Evrak_No: number | null;
@@ -352,33 +342,32 @@ export async function getBildirimler(
     if (!isAdmin(user)) params.firmaId = user.id;
 
     kabulRows = await query<NumuneKabulEvent>(
-      `SELECT TOP 50
+      `SELECT
           n.ID AS NkrID, n.Evrak_No, n.RaporNo, n.Numune_Adi, n.Tarih
-       FROM dbo.NKR n
-       WHERE n.Durum = N'Aktif'
-         AND (n.Rapor_Durumu IS NULL OR n.Rapor_Durumu <> N'Raporlandı')
+       FROM NKR n
+       WHERE n.Durum = 'Aktif'
+         AND (n.Rapor_Durumu IS NULL OR n.Rapor_Durumu <> 'Raporlandı')
          AND n.Tarih >= @since
          ${firmaFilter}
-       ORDER BY n.Tarih DESC, n.ID DESC`,
+       ORDER BY n.Tarih DESC, n.ID DESC
+       LIMIT 50`,
       params
     );
 
-    // NKR_LabKabul satırı oluştuğunda o (Bölüm × Format) grubu kabul edilmiş
-    // demektir. Tarih önceliği: OlusturmaTarihi (gerçek INSERT anı,
-    // DEFAULT GETDATE) → KabulTarihi (manuel) → NKR.Tarih (fallback).
     analizRows = await query<NumuneAnalizEvent>(
-      `SELECT TOP 50
+      `SELECT
           k.ID AS LabID, k.NkrID,
           n.Evrak_No, n.RaporNo, n.Numune_Adi,
           k.RaporFormati,
           COALESCE(k.OlusturmaTarihi, k.KabulTarihi, n.Tarih) AS Tarih
-       FROM cosmoroot.NKR_LabKabul k
-       INNER JOIN dbo.NKR n ON n.ID = k.NkrID
-       WHERE n.Durum = N'Aktif'
-         AND (n.Rapor_Durumu IS NULL OR n.Rapor_Durumu <> N'Raporlandı')
+       FROM NKR_LabKabul k
+       INNER JOIN NKR n ON n.ID = k.NkrID
+       WHERE n.Durum = 'Aktif'
+         AND (n.Rapor_Durumu IS NULL OR n.Rapor_Durumu <> 'Raporlandı')
          AND COALESCE(k.OlusturmaTarihi, k.KabulTarihi, n.Tarih) >= @since
          ${firmaFilter}
-       ORDER BY k.ID DESC`,
+       ORDER BY k.ID DESC
+       LIMIT 50`,
       params
     );
   }
@@ -412,13 +401,13 @@ export async function getBildirimler(
 
   // ---- Destek olayları ----
   if (isAdmin(user)) {
-    // Admin: yeni açılan ticketlar
     const yeniTicketlar = await query<DestekYeniEvent>(
-      `SELECT TOP 30 d.TalepID, d.DESTEK_NO, d.BASLIK, d.KAYIT_TARIHI, f.Firma_Adi AS KayitEdenFirma
+      `SELECT d.TalepID, d.DESTEK_NO, d.BASLIK, d.KAYIT_TARIHI, f.Firma_Adi AS KayitEdenFirma
        FROM DESTEK d
        LEFT JOIN Firma f ON f.ID = d.KAYIT_EDEN
        WHERE d.Tarih >= @since
-       ORDER BY d.Tarih DESC, d.ID DESC`,
+       ORDER BY d.Tarih DESC, d.ID DESC
+       LIMIT 30`,
       { since }
     );
     for (const t of yeniTicketlar) {
@@ -434,17 +423,17 @@ export async function getBildirimler(
       });
     }
 
-    // Admin: müşterinin yanıtları
     const musteriYanitlari = await query<DestekYanitEvent>(
-      `SELECT TOP 30 dd.DETAY_ID, dd.DESTEK_REF, d.DESTEK_NO, dd.MESAJ, dd.MESAJ_TARIHI,
+      `SELECT dd.DETAY_ID, dd.DESTEK_REF, d.DESTEK_NO, dd.MESAJ, dd.MESAJ_TARIHI,
               d.BASLIK AS Baslik,
               f.Firma_Adi AS GonderenAdi
        FROM DESTEK_DETAY dd
        INNER JOIN DESTEK d ON d.TalepID = dd.DESTEK_REF
        LEFT JOIN Firma f ON f.ID = dd.KAYIT_EDEN
        WHERE f.Tur <> 'Admin'
-         AND TRY_CAST(dd.MESAJ_TARIHI AS datetime) >= @since
-       ORDER BY dd.DETAY_ID DESC`,
+         AND CAST(dd.MESAJ_TARIHI AS DATETIME) >= @since
+       ORDER BY dd.DETAY_ID DESC
+       LIMIT 30`,
       { since }
     );
     for (const m of musteriYanitlari) {
@@ -460,9 +449,8 @@ export async function getBildirimler(
       });
     }
   } else if (user.kod) {
-    // Müşteri/Proje: kendi taleplerine gelen admin yanıtları
     const adminYanitlari = await query<DestekYanitEvent>(
-      `SELECT TOP 30 dd.DETAY_ID, dd.DESTEK_REF, d.DESTEK_NO, dd.MESAJ, dd.MESAJ_TARIHI,
+      `SELECT dd.DETAY_ID, dd.DESTEK_REF, d.DESTEK_NO, dd.MESAJ, dd.MESAJ_TARIHI,
               d.BASLIK AS Baslik,
               f.Firma_Adi AS GonderenAdi
        FROM DESTEK_DETAY dd
@@ -470,8 +458,9 @@ export async function getBildirimler(
        LEFT JOIN Firma f ON f.ID = dd.KAYIT_EDEN
        WHERE d.FirmaKodu = @kod
          AND (f.Kod IS NULL OR f.Kod <> @kod)
-         AND TRY_CAST(dd.MESAJ_TARIHI AS datetime) >= @since
-       ORDER BY dd.DETAY_ID DESC`,
+         AND CAST(dd.MESAJ_TARIHI AS DATETIME) >= @since
+       ORDER BY dd.DETAY_ID DESC
+       LIMIT 30`,
       { since, kod: user.kod }
     );
     for (const m of adminYanitlari) {
@@ -488,7 +477,6 @@ export async function getBildirimler(
     }
   }
 
-  // Tarihe göre azalan sırala, en fazla 50 göster
   all.sort((a, b) => b.tarih.getTime() - a.tarih.getTime());
   return all.slice(0, 50);
 }
@@ -514,12 +502,10 @@ export async function getSonGoruldu(firmaId: number): Promise<Date | null> {
 
 export async function markBildirimlerOkundu(firmaId: number): Promise<void> {
   await ensureTable();
-  // UPSERT
   await query(
-    `MERGE BildirimOkuma AS target
-     USING (SELECT @id AS FirmaID) AS src ON target.FirmaID = src.FirmaID
-     WHEN MATCHED THEN UPDATE SET SonGoruldu = GETDATE()
-     WHEN NOT MATCHED THEN INSERT (FirmaID, SonGoruldu) VALUES (@id, GETDATE());`,
+    `INSERT INTO BildirimOkuma (FirmaID, SonGoruldu)
+     VALUES (@id, NOW())
+     ON DUPLICATE KEY UPDATE SonGoruldu = NOW()`,
     { id: firmaId }
   );
 }

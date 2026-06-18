@@ -1,4 +1,11 @@
-import { query, queryOne, getPool, sql } from "@/lib/db";
+import {
+  query,
+  queryOne,
+  withTransaction,
+  insertAndGetId,
+  queryOneConn,
+  executeConn,
+} from "@/lib/db-mysql";
 import { scopeByFirma } from "@/lib/permissions";
 import type { SessionUser } from "@/types/db";
 
@@ -17,7 +24,7 @@ export async function listTalepler(
 ): Promise<TalepListeItem[]> {
   const scope = scopeByFirma(user, "firmakodu");
   return query<TalepListeItem>(
-    `SELECT ID, [Talep No], Tarih, [Talep Oluşturan], [Müşteri], Durum, FirmaKodu
+    `SELECT ID, \`Talep No\`, Tarih, \`Talep Oluşturan\`, \`Müşteri\`, Durum, FirmaKodu
      FROM VIEW_TALEP_LISTE
      WHERE ${scope.clause}
      ORDER BY Tarih DESC, ID DESC`,
@@ -66,7 +73,6 @@ export async function getTalepDetail(
   user: SessionUser,
   id: number
 ): Promise<TalepDetail> {
-  // Önce talebi getir, sonra erişim hakkını kontrol et.
   const talep = await queryOne<{
     ID: number;
     TalepNo: number;
@@ -85,7 +91,6 @@ export async function getTalepDetail(
     return { talep: null, raporlama: null, fatura: null, numuneler: [] };
   }
 
-  // Erişim kontrolü: Admin değilse FirmaKodu eşleşmesi şart.
   if (user.tur !== "Admin" && talep.FirmaKodu !== user.kod) {
     return { talep: null, raporlama: null, fatura: null, numuneler: [] };
   }
@@ -162,10 +167,6 @@ export interface YeniTalepInput {
   sozlesme: number;
 }
 
-/**
- * Talep no için kullanılan alfabe — karışıklığa yatkın (0/O, 1/I, L) karakterler
- * dışarıda. Crockford-style.
- */
 const TALEP_KOD_ALFABE = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
 
 function randomKod(uzunluk = 4): string {
@@ -176,7 +177,6 @@ function randomKod(uzunluk = 4): string {
   return s;
 }
 
-/** "ÜGAM/26/XXXX" — Yıl 2 haneli, XXXX rastgele 4 karakter. */
 function uretDisTalepKodu(now = new Date()): string {
   const yil = String(now.getFullYear()).slice(2);
   return `ÜGAM/${yil}/${randomKod(4)}`;
@@ -190,208 +190,206 @@ export interface PublicTalepInput {
 }
 
 export async function createPublicTalep(input: PublicTalepInput): Promise<number> {
-  const pool = await getPool();
-  const tx = new sql.Transaction(pool);
-  await tx.begin();
-
-  try {
-    const last = await new sql.Request(tx).query<{ TalepNo: number | null }>(
-      `SELECT TOP 1 TalepNo FROM Talep ORDER BY ID DESC`
+  return withTransaction(async (conn) => {
+    const last = await queryOneConn<{ TalepNo: number | null }>(
+      conn,
+      `SELECT TalepNo FROM Talep ORDER BY ID DESC LIMIT 1`
     );
-    const yeniNo = Number(last.recordset?.[0]?.TalepNo ?? 0) + 1;
+    const yeniNo = Number(last?.TalepNo ?? 0) + 1;
 
     let disKod = uretDisTalepKodu();
     for (let i = 0; i < 5; i++) {
-      const dupe = await new sql.Request(tx)
-        .input("k", sql.NVarChar(20), disKod)
-        .query<{ n: number }>(
-          `SELECT COUNT(*) AS n FROM dbo.Talep WHERE DisTalepKodu = @k`
-        );
-      if ((dupe.recordset[0]?.n ?? 0) === 0) break;
+      const dupe = await queryOneConn<{ n: number }>(
+        conn,
+        `SELECT COUNT(*) AS n FROM Talep WHERE DisTalepKodu = @k`,
+        { k: disKod }
+      );
+      if ((dupe?.n ?? 0) === 0) break;
       disKod = uretDisTalepKodu();
     }
 
-    const talepReq = new sql.Request(tx)
-      .input("tarih", sql.Date, new Date())
-      .input("kod", sql.NVarChar(10), "YENI")
-      .input("sozlesme", sql.Int, input.sozlesme ? 1 : 0)
-      .input("durum", sql.NVarChar(20), "Yeni Talep")
-      .input("talepNo", sql.Int, yeniNo)
-      .input("disTalepKodu", sql.NVarChar(20), disKod)
-      .input("yetkili", sql.Int, 0)
-      .input("tur", sql.NVarChar(10), "Analiz")
-      .input("olusturan", sql.Int, 0);
-
-    const inserted = await talepReq.query<{ ID: number }>(
+    const talepId = await insertAndGetId(
+      conn,
       `INSERT INTO Talep (Tarih, FirmaKodu, Sozlesme, Durum, TalepNo, DisTalepKodu, Yetkili, Tur, Olusturan)
-       OUTPUT INSERTED.ID
-       VALUES (@tarih, @kod, @sozlesme, @durum, @talepNo, @disTalepKodu, @yetkili, @tur, @olusturan)`
+       VALUES (@tarih, @kod, @sozlesme, @durum, @talepNo, @disTalepKodu, @yetkili, @tur, @olusturan)`,
+      {
+        tarih: new Date(),
+        kod: "YENI",
+        sozlesme: input.sozlesme ? 1 : 0,
+        durum: "Yeni Talep",
+        talepNo: yeniNo,
+        disTalepKodu: disKod,
+        yetkili: 0,
+        tur: "Analiz",
+        olusturan: 0,
+      }
     );
-    const talepId = inserted.recordset[0].ID;
 
     const r = input.raporlama;
-    const rapReq = new sql.Request(tx)
-      .input("tid", sql.Int, talepId)
-      .input("firma", sql.NVarChar(sql.MAX), r.Firma ?? "")
-      .input("adres", sql.NVarChar(sql.MAX), r.Adres ?? "")
-      .input("yetkili", sql.NVarChar(150), r.Yetkili ?? "")
-      .input("iletisim", sql.NVarChar(150), r.Iletisim ?? "")
-      .input("karar", sql.NVarChar(30), r.Karar ?? "")
-      .input("dil", sql.NVarChar(25), r.Dil ?? "Türkçe")
-      .input("iade", sql.NVarChar(10), r.Iade ?? "Hayır")
-      .input("uretici", sql.NVarChar(sql.MAX), r.UreticiFirma ?? "")
-      .input("note", sql.NVarChar(sql.MAX), r.Note ?? "");
-
     const rMail = (r as { Mail?: string }).Mail ?? "";
     if (rMail) {
-      rapReq.input("rmail", sql.NVarChar(150), rMail);
-      await rapReq.query(
+      await executeConn(
+        conn,
         `INSERT INTO TalepRaporlama
          (TalepID, Firma, Adres, Yetkili, Iletisim, Karar, Dil, Iade, UreticiFirma, Note, Mail)
-         VALUES (@tid, @firma, @adres, @yetkili, @iletisim, @karar, @dil, @iade, @uretici, @note, @rmail)`
+         VALUES (@tid, @firma, @adres, @yetkili, @iletisim, @karar, @dil, @iade, @uretici, @note, @rmail)`,
+        {
+          tid: talepId,
+          firma: r.Firma ?? "",
+          adres: r.Adres ?? "",
+          yetkili: r.Yetkili ?? "",
+          iletisim: r.Iletisim ?? "",
+          karar: r.Karar ?? "",
+          dil: r.Dil ?? "Türkçe",
+          iade: r.Iade ?? "Hayır",
+          uretici: r.UreticiFirma ?? "",
+          note: r.Note ?? "",
+          rmail: rMail,
+        }
       );
     } else {
-      await rapReq.query(
+      await executeConn(
+        conn,
         `INSERT INTO TalepRaporlama
          (TalepID, Firma, Adres, Yetkili, Iletisim, Karar, Dil, Iade, UreticiFirma, Note)
-         VALUES (@tid, @firma, @adres, @yetkili, @iletisim, @karar, @dil, @iade, @uretici, @note)`
+         VALUES (@tid, @firma, @adres, @yetkili, @iletisim, @karar, @dil, @iade, @uretici, @note)`,
+        {
+          tid: talepId,
+          firma: r.Firma ?? "",
+          adres: r.Adres ?? "",
+          yetkili: r.Yetkili ?? "",
+          iletisim: r.Iletisim ?? "",
+          karar: r.Karar ?? "",
+          dil: r.Dil ?? "Türkçe",
+          iade: r.Iade ?? "Hayır",
+          uretici: r.UreticiFirma ?? "",
+          note: r.Note ?? "",
+        }
       );
     }
 
     const f = input.fatura;
-    await new sql.Request(tx)
-      .input("tid", sql.Int, talepId)
-      .input("firma", sql.NVarChar(sql.MAX), f.Firma ?? "")
-      .input("adres", sql.NVarChar(sql.MAX), f.Adres ?? "")
-      .input("vd", sql.NVarChar(50), f.VergiDairesi ?? "")
-      .input("vno", sql.NVarChar(15), f.VergiNo ?? "")
-      .input("mail", sql.NVarChar(150), f.Mail ?? "")
-      .query(
-        `INSERT INTO TalepFatura (TalepID, Firma, Adres, VergiDairesi, VergiNo, Mail)
-         VALUES (@tid, @firma, @adres, @vd, @vno, @mail)`
-      );
+    await executeConn(
+      conn,
+      `INSERT INTO TalepFatura (TalepID, Firma, Adres, VergiDairesi, VergiNo, Mail)
+       VALUES (@tid, @firma, @adres, @vd, @vno, @mail)`,
+      {
+        tid: talepId,
+        firma: f.Firma ?? "",
+        adres: f.Adres ?? "",
+        vd: f.VergiDairesi ?? "",
+        vno: f.VergiNo ?? "",
+        mail: f.Mail ?? "",
+      }
+    );
 
     for (const n of input.numuneler) {
       if (!n.Numune?.trim() && !n.Analiz?.trim()) continue;
-      await new sql.Request(tx)
-        .input("tid", sql.Int, talepId)
-        .input("numune", sql.NVarChar(250), n.Numune ?? "")
-        .input("ozellik", sql.NVarChar(250), n.Ozellik ?? "")
-        .input("analiz", sql.NVarChar(250), n.Analiz ?? "")
-        .input("metot", sql.NVarChar(250), n.Metot ?? "")
-        .query(
-          `INSERT INTO TalepNumune (TalepID, Numune, Ozellik, Analiz, Metot)
-           VALUES (@tid, @numune, @ozellik, @analiz, @metot)`
-        );
+      await executeConn(
+        conn,
+        `INSERT INTO TalepNumune (TalepID, Numune, Ozellik, Analiz, Metot)
+         VALUES (@tid, @numune, @ozellik, @analiz, @metot)`,
+        {
+          tid: talepId,
+          numune: n.Numune ?? "",
+          ozellik: n.Ozellik ?? "",
+          analiz: n.Analiz ?? "",
+          metot: n.Metot ?? "",
+        }
+      );
     }
 
-    await tx.commit();
     return talepId;
-  } catch (err) {
-    await tx.rollback();
-    throw err;
-  }
+  });
 }
 
 export async function createTalep(input: YeniTalepInput): Promise<number> {
-  const pool = await getPool();
-  const tx = new sql.Transaction(pool);
-  await tx.begin();
-
-  try {
-    // 1) Sonraki TalepNo (mevcut PHP davranışına paralel: TOP 1 ORDER BY ID DESC + 1)
-    const last = await new sql.Request(tx).query<{ TalepNo: number | null }>(
-      `SELECT TOP 1 TalepNo FROM Talep ORDER BY ID DESC`
+  return withTransaction(async (conn) => {
+    const last = await queryOneConn<{ TalepNo: number | null }>(
+      conn,
+      `SELECT TalepNo FROM Talep ORDER BY ID DESC LIMIT 1`
     );
-    const lastNo = Number(last.recordset?.[0]?.TalepNo ?? 0);
-    const yeniNo = lastNo + 1;
+    const yeniNo = Number(last?.TalepNo ?? 0) + 1;
 
-    // 2) Çakışmasız dış kod (en fazla 5 deneme) — 31^4 = 923k ihtimal, çakışma
-    //    pratikte ihmal edilebilir ama yine de retry koyuyoruz.
     let disKod = uretDisTalepKodu();
     for (let i = 0; i < 5; i++) {
-      const dupe = await new sql.Request(tx)
-        .input("k", sql.NVarChar(20), disKod)
-        .query<{ n: number }>(
-          `SELECT COUNT(*) AS n FROM dbo.Talep WHERE DisTalepKodu = @k`
-        );
-      if ((dupe.recordset[0]?.n ?? 0) === 0) break;
+      const dupe = await queryOneConn<{ n: number }>(
+        conn,
+        `SELECT COUNT(*) AS n FROM Talep WHERE DisTalepKodu = @k`,
+        { k: disKod }
+      );
+      if ((dupe?.n ?? 0) === 0) break;
       disKod = uretDisTalepKodu();
     }
 
-    // 3) Talep
-    const talepReq = new sql.Request(tx)
-      .input("tarih", sql.Date, new Date())
-      .input("kod", sql.NVarChar(10), input.user.kod ?? "")
-      .input("sozlesme", sql.Int, input.sozlesme ? 1 : 0)
-      .input("durum", sql.NVarChar(20), "Yeni Talep")
-      .input("talepNo", sql.Int, yeniNo)
-      .input("disTalepKodu", sql.NVarChar(20), disKod)
-      .input("yetkili", sql.Int, 0)
-      // VIEW_TALEP_LISTE yalnızca Tur='Analiz' kayıtlarını gösterir; portaldan
-      // oluşturulan talepler de analiz talebi olduğundan bu değerle yazılır.
-      .input("tur", sql.NVarChar(10), "Analiz")
-      .input("olusturan", sql.Int, input.user.id);
-
-    const inserted = await talepReq.query<{ ID: number }>(
+    const talepId = await insertAndGetId(
+      conn,
       `INSERT INTO Talep (Tarih, FirmaKodu, Sozlesme, Durum, TalepNo, DisTalepKodu, Yetkili, Tur, Olusturan)
-       OUTPUT INSERTED.ID
-       VALUES (@tarih, @kod, @sozlesme, @durum, @talepNo, @disTalepKodu, @yetkili, @tur, @olusturan)`
+       VALUES (@tarih, @kod, @sozlesme, @durum, @talepNo, @disTalepKodu, @yetkili, @tur, @olusturan)`,
+      {
+        tarih: new Date(),
+        kod: input.user.kod ?? "",
+        sozlesme: input.sozlesme ? 1 : 0,
+        durum: "Yeni Talep",
+        talepNo: yeniNo,
+        disTalepKodu: disKod,
+        yetkili: 0,
+        tur: "Analiz",
+        olusturan: input.user.id,
+      }
     );
-    const talepId = inserted.recordset[0].ID;
 
-    // 3) TalepRaporlama
     const r = input.raporlama;
-    await new sql.Request(tx)
-      .input("tid", sql.Int, talepId)
-      .input("firma", sql.NVarChar(sql.MAX), r.Firma ?? "")
-      .input("adres", sql.NVarChar(sql.MAX), r.Adres ?? "")
-      .input("yetkili", sql.NVarChar(150), r.Yetkili ?? "")
-      .input("iletisim", sql.NVarChar(150), r.Iletisim ?? "")
-      .input("karar", sql.NVarChar(30), r.Karar ?? "")
-      .input("dil", sql.NVarChar(25), r.Dil ?? "Türkçe")
-      .input("iade", sql.NVarChar(10), r.Iade ?? "Hayır")
-      .input("uretici", sql.NVarChar(sql.MAX), r.UreticiFirma ?? "")
-      .input("note", sql.NVarChar(sql.MAX), r.Note ?? "")
-      .query(
-        `INSERT INTO TalepRaporlama
-         (TalepID, Firma, Adres, Yetkili, Iletisim, Karar, Dil, Iade, UreticiFirma, Note)
-         VALUES (@tid, @firma, @adres, @yetkili, @iletisim, @karar, @dil, @iade, @uretici, @note)`
-      );
+    await executeConn(
+      conn,
+      `INSERT INTO TalepRaporlama
+       (TalepID, Firma, Adres, Yetkili, Iletisim, Karar, Dil, Iade, UreticiFirma, Note)
+       VALUES (@tid, @firma, @adres, @yetkili, @iletisim, @karar, @dil, @iade, @uretici, @note)`,
+      {
+        tid: talepId,
+        firma: r.Firma ?? "",
+        adres: r.Adres ?? "",
+        yetkili: r.Yetkili ?? "",
+        iletisim: r.Iletisim ?? "",
+        karar: r.Karar ?? "",
+        dil: r.Dil ?? "Türkçe",
+        iade: r.Iade ?? "Hayır",
+        uretici: r.UreticiFirma ?? "",
+        note: r.Note ?? "",
+      }
+    );
 
-    // 4) TalepFatura
     const f = input.fatura;
-    await new sql.Request(tx)
-      .input("tid", sql.Int, talepId)
-      .input("firma", sql.NVarChar(sql.MAX), f.Firma ?? "")
-      .input("adres", sql.NVarChar(sql.MAX), f.Adres ?? "")
-      .input("vd", sql.NVarChar(50), f.VergiDairesi ?? "")
-      .input("vno", sql.NVarChar(15), f.VergiNo ?? "")
-      .input("mail", sql.NVarChar(150), f.Mail ?? "")
-      .query(
-        `INSERT INTO TalepFatura (TalepID, Firma, Adres, VergiDairesi, VergiNo, Mail)
-         VALUES (@tid, @firma, @adres, @vd, @vno, @mail)`
-      );
+    await executeConn(
+      conn,
+      `INSERT INTO TalepFatura (TalepID, Firma, Adres, VergiDairesi, VergiNo, Mail)
+       VALUES (@tid, @firma, @adres, @vd, @vno, @mail)`,
+      {
+        tid: talepId,
+        firma: f.Firma ?? "",
+        adres: f.Adres ?? "",
+        vd: f.VergiDairesi ?? "",
+        vno: f.VergiNo ?? "",
+        mail: f.Mail ?? "",
+      }
+    );
 
-    // 5) Numuneler
     for (const n of input.numuneler) {
       if (!n.Numune?.trim() && !n.Analiz?.trim()) continue;
-      await new sql.Request(tx)
-        .input("tid", sql.Int, talepId)
-        .input("numune", sql.NVarChar(250), n.Numune ?? "")
-        .input("ozellik", sql.NVarChar(250), n.Ozellik ?? "")
-        .input("analiz", sql.NVarChar(250), n.Analiz ?? "")
-        .input("metot", sql.NVarChar(250), n.Metot ?? "")
-        .query(
-          `INSERT INTO TalepNumune (TalepID, Numune, Ozellik, Analiz, Metot)
-           VALUES (@tid, @numune, @ozellik, @analiz, @metot)`
-        );
+      await executeConn(
+        conn,
+        `INSERT INTO TalepNumune (TalepID, Numune, Ozellik, Analiz, Metot)
+         VALUES (@tid, @numune, @ozellik, @analiz, @metot)`,
+        {
+          tid: talepId,
+          numune: n.Numune ?? "",
+          ozellik: n.Ozellik ?? "",
+          analiz: n.Analiz ?? "",
+          metot: n.Metot ?? "",
+        }
+      );
     }
 
-    await tx.commit();
     return talepId;
-  } catch (err) {
-    await tx.rollback();
-    throw err;
-  }
+  });
 }

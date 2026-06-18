@@ -9,14 +9,19 @@
  *   2. Telefon → Firma eşleştir
  *   3. Eşleşme yoksa: kibarca "kayıtlı değilsiniz" yanıtla
  *   4. Eşleşme varsa:
- *        - Açık DESTEK ticket'ı var mı? (son 24 saatte aynı firmadan)
+ *        - Açık DESTEK ticket'ı var mı? (son 48 saatte aynı firmadan)
  *        - Varsa onun DESTEK_DETAY'ına ekle
  *        - Yoksa yeni DESTEK kaydı oluştur (BASLIK = mesajın ilk 80 karakteri)
  *   5. Otomatik yanıt: "Mesajınız alındı, ekibimiz bakacak."
  */
 
 import { NextResponse } from "next/server";
-import { getPool, queryOne, sql } from "@/lib/db";
+import {
+  withTransaction,
+  insertAndGetId,
+  queryOneConn,
+  executeConn,
+} from "@/lib/db-mysql";
 import { findFirmaByPhone } from "@/lib/repositories/firma-phone";
 import {
   sendText,
@@ -37,7 +42,6 @@ interface TwilioInbound {
 }
 
 export async function POST(req: Request) {
-  // İsteği bir kez oku — hem imza doğrulaması hem parse için aynı gövde.
   const ct = req.headers.get("content-type") ?? "";
   let allParams: Record<string, string> = {};
   let inbound: TwilioInbound | null = null;
@@ -58,7 +62,6 @@ export async function POST(req: Request) {
   }
 
   // --- Doğrulama katmanı ---
-  // 1) Twilio imzası (TWILIO_AUTH_TOKEN tanımlıysa zorunlu)
   const sigResult = verifyTwilioSignature(
     req.url,
     allParams,
@@ -67,7 +70,6 @@ export async function POST(req: Request) {
   if (sigResult === false) {
     return NextResponse.json({ error: "invalid signature" }, { status: 401 });
   }
-  // 2) İmza yapılandırılmamışsa (sigResult === null) opsiyonel secret'a düş
   if (sigResult === null) {
     const secret = process.env.WHATSAPP_WEBHOOK_SECRET;
     if (secret) {
@@ -86,7 +88,6 @@ export async function POST(req: Request) {
   const firma = await findFirmaByPhone(phone);
 
   if (!firma) {
-    // Kayıtlı olmayan numaraya bilgilendirme
     await sendText(
       inbound.From,
       "Merhaba, bu numara UNIQUE Analiz portalında kayıtlı görünmüyor. Kayıtlı olduğunuz cep numaranızdan yazmayı deneyebilir veya destek@uniqueanaliz.com ile iletişime geçebilirsiniz."
@@ -94,98 +95,91 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: true, matched: false });
   }
 
-  const pool = await getPool();
-  const tx = new sql.Transaction(pool);
-  await tx.begin();
-
   try {
-    const tarih = new Date().toISOString().slice(0, 19).replace("T", " ");
+    let talepId: number;
+    let isNew = false;
 
-    // Açık ticket var mı? (son 24 saat içinde aynı firmadan WhatsApp gelmiş mi)
-    const recent = await new sql.Request(tx)
-      .input("kod", sql.NVarChar(10), firma.Kod ?? "")
-      .query<{ ID: number; TalepID: number }>(
-        `SELECT TOP 1 d.ID, d.TalepID
+    await withTransaction(async (conn) => {
+      const tarih = new Date().toISOString().slice(0, 19).replace("T", " ");
+
+      const recent = await queryOneConn<{ ID: number; TalepID: number }>(
+        conn,
+        `SELECT d.ID, d.TalepID
          FROM DESTEK d
          WHERE d.FirmaKodu = @kod
            AND d.Durum NOT IN ('Pasif', 'Kapalı', 'Tamamlandı')
            AND d.TUR = 'WA'
-           AND d.Tarih >= CAST(DATEADD(HOUR, -48, GETDATE()) AS DATE)
-         ORDER BY d.ID DESC`
+           AND d.Tarih >= DATE_SUB(NOW(), INTERVAL 48 HOUR)
+         ORDER BY d.ID DESC
+         LIMIT 1`,
+        { kod: firma.Kod ?? "" }
       );
 
-    let talepId: number;
-
-    if (recent.recordset.length > 0) {
-      // Mevcut ticket'a ekle
-      talepId = recent.recordset[0].TalepID;
-    } else {
-      // Yeni DESTEK + Talep oluştur
-      const last = await new sql.Request(tx).query<{ TalepNo: number | null }>(
-        `SELECT TOP 1 TalepNo FROM Talep ORDER BY ID DESC`
-      );
-      const yeniNo = Number(last.recordset?.[0]?.TalepNo ?? 0) + 1;
-
-      const ins = await new sql.Request(tx)
-        .input("tarih", sql.Date, new Date())
-        .input("kod", sql.NVarChar(10), firma.Kod ?? "")
-        .input("sozlesme", sql.Int, 0)
-        .input("durum", sql.NVarChar(20), "Yeni Talep")
-        .input("talepNo", sql.Int, yeniNo)
-        .input("yetkili", sql.Int, 0)
-        .input("tur", sql.NVarChar(6), "Destek")
-        .input("olusturan", sql.Int, firma.ID)
-        .query<{ ID: number }>(
-          `INSERT INTO Talep (Tarih, FirmaKodu, Sozlesme, Durum, TalepNo, Yetkili, Tur, Olusturan)
-           OUTPUT INSERTED.ID
-           VALUES (@tarih, @kod, @sozlesme, @durum, @talepNo, @yetkili, @tur, @olusturan)`
+      if (recent) {
+        talepId = recent.TalepID;
+        isNew = false;
+      } else {
+        isNew = true;
+        const last = await queryOneConn<{ TalepNo: number | null }>(
+          conn,
+          `SELECT TalepNo FROM Talep ORDER BY ID DESC LIMIT 1`
         );
-      talepId = ins.recordset[0].ID;
+        const yeniNo = Number(last?.TalepNo ?? 0) + 1;
 
-      // DESTEK header (TUR = "WA" → WhatsApp kanalı)
-      const destekNo = await generateDestekNo(tx, firma.Kod ?? "");
-      await new sql.Request(tx)
-        .input("no", sql.VarChar(100), destekNo)
-        .input("tur", sql.NVarChar(6), "WA")
-        .input("konu", sql.TinyInt, 1)
-        .input("baslik", sql.VarChar(255), inbound.Body.slice(0, 80))
-        .input("aciklama", sql.Text, inbound.Body)
-        .input("kt", sql.VarChar(50), tarih)
-        .input("kim", sql.Int, firma.ID)
-        .input("durum", sql.NVarChar(20), "Yeni Talep")
-        .input("tarihD", sql.Date, new Date())
-        .input("kod", sql.NVarChar(10), firma.Kod ?? "")
-        .input("soz", sql.Int, 0)
-        .input("tid", sql.Int, talepId)
-        .query(
+        talepId = await insertAndGetId(
+          conn,
+          `INSERT INTO Talep (Tarih, FirmaKodu, Sozlesme, Durum, TalepNo, Yetkili, Tur, Olusturan)
+           VALUES (@tarih, @kod, @sozlesme, @durum, @talepNo, @yetkili, @tur, @olusturan)`,
+          {
+            tarih: new Date(),
+            kod: firma.Kod ?? "",
+            sozlesme: 0,
+            durum: "Yeni Talep",
+            talepNo: yeniNo,
+            yetkili: 0,
+            tur: "Destek",
+            olusturan: firma.ID,
+          }
+        );
+
+        const destekNo = await generateDestekNo(conn, firma.Kod ?? "");
+        await executeConn(
+          conn,
           `INSERT INTO DESTEK
            (DESTEK_NO, TUR, KONU_TUR, BASLIK, ACIKLAMA, KAYIT_TARIHI, KAYIT_EDEN,
             Durum, Tarih, FirmaKodu, Sozlesme, TalepID)
-           VALUES (@no, @tur, @konu, @baslik, @aciklama, @kt, @kim, @durum, @tarihD, @kod, @soz, @tid)`
+           VALUES (@no, @tur, @konu, @baslik, @aciklama, @kt, @kim, @durum, @tarihD, @kod, @soz, @tid)`,
+          {
+            no: destekNo,
+            tur: "WA",
+            konu: 1,
+            baslik: inbound!.Body.slice(0, 80),
+            aciklama: inbound!.Body,
+            kt: tarih,
+            kim: firma.ID,
+            durum: "Yeni Talep",
+            tarihD: new Date(),
+            kod: firma.Kod ?? "",
+            soz: 0,
+            tid: talepId,
+          }
         );
-    }
+      }
 
-    // Mesajı DESTEK_DETAY'a ekle
-    await new sql.Request(tx)
-      .input("ref", sql.Int, talepId)
-      .input("mesaj", sql.Text, inbound.Body)
-      .input("tarih", sql.VarChar(50), tarih)
-      .input("kim", sql.Int, firma.ID)
-      .query(
+      await executeConn(
+        conn,
         `INSERT INTO DESTEK_DETAY (DESTEK_REF, MESAJ, MESAJ_TARIHI, KAYIT_EDEN)
-         VALUES (@ref, @mesaj, @tarih, @kim)`
+         VALUES (@ref, @mesaj, @tarih, @kim)`,
+        { ref: talepId, mesaj: inbound!.Body, tarih, kim: firma.ID }
       );
 
-    // Talep durumunu "Müşteri Yanıtı" yap
-    await new sql.Request(tx)
-      .input("tid", sql.Int, talepId)
-      .input("durum", sql.NVarChar(20), "Müşteri Yanıtı")
-      .query(`UPDATE Talep SET Durum = @durum WHERE ID = @tid`);
+      await executeConn(
+        conn,
+        `UPDATE Talep SET Durum = @durum WHERE ID = @tid`,
+        { tid: talepId, durum: "Müşteri Yanıtı" }
+      );
+    });
 
-    await tx.commit();
-
-    // Otomatik onay yanıtı
-    const isNew = recent.recordset.length === 0;
     await sendText(
       inbound.From,
       isNew
@@ -193,9 +187,8 @@ export async function POST(req: Request) {
         : `Mesajınız mevcut destek talebinize eklendi ✓`
     );
 
-    return NextResponse.json({ ok: true, matched: true, talepId, isNew });
+    return NextResponse.json({ ok: true, matched: true, talepId: talepId!, isNew });
   } catch (err) {
-    await tx.rollback();
     console.error("[whatsapp/webhook] hata:", err);
     return NextResponse.json(
       { error: (err as Error).message },

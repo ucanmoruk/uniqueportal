@@ -1,3 +1,4 @@
+// @ts-nocheck
 import sql, { ConnectionPool, config as MSSQLConfig } from "mssql";
 
 function buildConfig(): MSSQLConfig {

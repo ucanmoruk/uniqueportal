@@ -1,4 +1,4 @@
-import { query, queryOne } from "@/lib/db";
+import { query, queryOne } from "@/lib/db-mysql";
 import { isAdmin, scopeByFirma } from "@/lib/permissions";
 import type { SessionUser } from "@/types/db";
 
@@ -17,22 +17,22 @@ export interface FaturaListItem {
 const FATURA_CTE = `
 WITH ranked AS (
   SELECT *, ROW_NUMBER() OVER (
-    PARTITION BY [Fatura No]
-    ORDER BY CASE [Ödeme]
-      WHEN N'Ödendi' THEN 1
-      WHEN N'Kısmen Ödendi' THEN 2
-      WHEN N'Ödeme Bekliyor' THEN 3
-      WHEN N'Proforma Onaylandı' THEN 4
-      WHEN N'Proforma Reddedildi' THEN 5
-      WHEN N'İptal' THEN 6
+    PARTITION BY \`Fatura No\`
+    ORDER BY CASE \`Ödeme\`
+      WHEN 'Ödendi' THEN 1
+      WHEN 'Kısmen Ödendi' THEN 2
+      WHEN 'Ödeme Bekliyor' THEN 3
+      WHEN 'Proforma Onaylandı' THEN 4
+      WHEN 'Proforma Reddedildi' THEN 5
+      WHEN 'İptal' THEN 6
       ELSE 7
     END
   ) AS rn
   FROM VIEW_FATURA
-  WHERE [Ödeme] IS NOT NULL AND [Ödeme] <> N'Fatura Kesilmedi'
+  WHERE \`Ödeme\` IS NOT NULL AND \`Ödeme\` <> 'Fatura Kesilmedi'
 )`;
 
-const FATURA_COLS = `ID, [Fatura No], Tarih, [Müşteri], Proje, Tutar, KDV, Toplam, [Ödeme] AS Durum`;
+const FATURA_COLS = `ID, \`Fatura No\`, Tarih, \`Müşteri\`, Proje, Tutar, KDV, Toplam, \`Ödeme\` AS Durum`;
 
 export async function listFaturalar(
   user: SessionUser
@@ -64,14 +64,14 @@ export async function listFaturalar(
 export async function getFaturaOzet(user: SessionUser) {
   if (isAdmin(user)) {
     return queryOne<{ toplam: number; odenen: number; sayi: number }>(
-      `SELECT ISNULL(SUM(Toplam),0) AS toplam,
-              ISNULL(SUM(Odenen_Tutar),0) AS odenen,
+      `SELECT IFNULL(SUM(Toplam),0) AS toplam,
+              IFNULL(SUM(Odenen_Tutar),0) AS odenen,
               COUNT(*) AS sayi FROM Fatura`
     );
   }
   return queryOne<{ toplam: number; odenen: number; sayi: number }>(
-    `SELECT ISNULL(SUM(Toplam),0) AS toplam,
-            ISNULL(SUM(Odenen_Tutar),0) AS odenen,
+    `SELECT IFNULL(SUM(Toplam),0) AS toplam,
+            IFNULL(SUM(Odenen_Tutar),0) AS odenen,
             COUNT(*) AS sayi
      FROM Fatura WHERE FaturaFirmaID = @id`,
     { id: user.id }

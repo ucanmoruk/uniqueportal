@@ -1,4 +1,4 @@
-import { query, queryOne } from "@/lib/db";
+import { query, queryOne } from "@/lib/db-mysql";
 import type { Firma } from "@/types/db";
 
 export interface FirmaOption {
@@ -12,40 +12,43 @@ export async function listFirmaOptions(): Promise<FirmaOption[]> {
   return query<FirmaOption>(
     `SELECT ID, Kod, Firma_Adi, Tur
      FROM Firma
-     WHERE Durum = 'Aktif' AND Firma_Adi IS NOT NULL AND LEN(Firma_Adi) > 0
+     WHERE Durum = 'Aktif' AND Firma_Adi IS NOT NULL AND CHAR_LENGTH(Firma_Adi) > 0
      ORDER BY Firma_Adi ASC`
   );
 }
 
 export async function findFirmaByKod(kod: string): Promise<Firma | null> {
   return queryOne<Firma>(
-    `SELECT TOP 1 ID, Kod, Parola, Firma_Adi, Tur, Yetkili, Plasiyer, PlasiyerID,
+    `SELECT ID, Kod, Parola, Firma_Adi, Tur, Yetkili, Plasiyer, PlasiyerID,
             Adres, Telefon, Mail, Vergi_Dairesi, Vergi_No, Durum, Sektor,
             Hizmet, Vade, Odeme
      FROM Firma
-     WHERE LTRIM(RTRIM(Kod)) = @kod`,
+     WHERE TRIM(Kod) = @kod
+     LIMIT 1`,
     { kod: kod.trim() }
   );
 }
 
 export async function findFirmaByMail(mail: string): Promise<Firma | null> {
   return queryOne<Firma>(
-    `SELECT TOP 1 ID, Kod, Parola, Firma_Adi, Tur, Yetkili, Plasiyer, PlasiyerID,
+    `SELECT ID, Kod, Parola, Firma_Adi, Tur, Yetkili, Plasiyer, PlasiyerID,
             Adres, Telefon, Mail, Vergi_Dairesi, Vergi_No, Durum, Sektor,
             Hizmet, Vade, Odeme
      FROM Firma
-     WHERE LOWER(LTRIM(RTRIM(Mail))) = @mail AND Durum = N'Aktif'`,
+     WHERE LOWER(TRIM(Mail)) = @mail AND Durum = 'Aktif'
+     LIMIT 1`,
     { mail: mail.trim().toLowerCase() }
   );
 }
 
 export async function findFirmaById(id: number): Promise<Firma | null> {
   return queryOne<Firma>(
-    `SELECT TOP 1 ID, Kod, Parola, Firma_Adi, Tur, Yetkili, Plasiyer, PlasiyerID,
+    `SELECT ID, Kod, Parola, Firma_Adi, Tur, Yetkili, Plasiyer, PlasiyerID,
             Adres, Telefon, Mail, Vergi_Dairesi, Vergi_No, Durum, Sektor,
             Hizmet, Vade, Odeme
      FROM Firma
-     WHERE ID = @id`,
+     WHERE ID = @id
+     LIMIT 1`,
     { id }
   );
 }

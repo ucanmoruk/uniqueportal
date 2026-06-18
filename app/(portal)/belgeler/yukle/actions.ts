@@ -1,7 +1,13 @@
 "use server";
 
 import { requireAdmin } from "@/lib/auth";
-import { query, queryOne, getPool, sql } from "@/lib/db";
+import {
+  query,
+  withTransaction,
+  insertAndGetId,
+  queryOneConn,
+  executeConn,
+} from "@/lib/db-mysql";
 import {
   sendEmail,
   digestTemplate,
@@ -23,17 +29,10 @@ export type UploadState = {
   count?: number;
   error?: string;
   message?: string;
-  /** Kaydedilen rapor ID'leri (bildirim gönderimi için) */
   raporIds?: number[];
-  /** Etkilenen firma sayısı */
   firmaCount?: number;
 };
 
-/**
- * Belgeleri Rapor tablosuna kaydeder (storage entegrasyonu henüz yok —
- * Yol alanı pending placeholder ile yazılır, gerçek dosya bağlandığında
- * güncellenir).
- */
 export async function uploadBelgelerAction(
   _prev: UploadState,
   items: UploadItemInput[]
@@ -49,7 +48,6 @@ export async function uploadBelgelerAction(
     return { error: "Yüklenecek dosya yok." };
   }
 
-  // Doğrulamalar
   const errors: string[] = [];
   items.forEach((it, idx) => {
     if (!it.firmaId) errors.push(`#${idx + 1} ${it.fileName}: Firma seçilmedi.`);
@@ -61,58 +59,53 @@ export async function uploadBelgelerAction(
     return { error: errors.slice(0, 5).join(" | ") };
   }
 
-  const pool = await getPool();
-  const tx = new sql.Transaction(pool);
-  await tx.begin();
-
   const raporIds: number[] = [];
   const firmaSet = new Set<number>();
 
   try {
-    // RaporNo başlangıcı: tablodaki son + 1
-    const last = await new sql.Request(tx).query<{ RaporNo: number | null }>(
-      `SELECT TOP 1 RaporNo FROM Rapor ORDER BY ID DESC`
-    );
-    let nextNo = Number(last.recordset?.[0]?.RaporNo ?? 0) + 1;
+    await withTransaction(async (conn) => {
+      const last = await queryOneConn<{ RaporNo: number | null }>(
+        conn,
+        `SELECT RaporNo FROM Rapor ORDER BY ID DESC LIMIT 1`
+      );
+      let nextNo = Number(last?.RaporNo ?? 0) + 1;
 
-    for (const it of items) {
-      if (!it.firmaId) continue;
-      firmaSet.add(it.firmaId);
+      for (const it of items) {
+        if (!it.firmaId) continue;
+        firmaSet.add(it.firmaId);
 
-      // Firma adını al (Rapor.FirmaAd alanına yazılacak)
-      const firma = await new sql.Request(tx)
-        .input("id", sql.Int, it.firmaId)
-        .query<{ Firma_Adi: string | null }>(
-          `SELECT Firma_Adi FROM Firma WHERE ID = @id`
+        const firma = await queryOneConn<{ Firma_Adi: string | null }>(
+          conn,
+          `SELECT Firma_Adi FROM Firma WHERE ID = @id`,
+          { id: it.firmaId }
         );
-      const firmaAd = firma.recordset?.[0]?.Firma_Adi ?? null;
+        const firmaAd = firma?.Firma_Adi ?? null;
 
-      const ins = await new sql.Request(tx)
-        .input("raporNo", sql.Int, nextNo)
-        .input("firmaAd", sql.NVarChar(sql.MAX), firmaAd)
-        .input("numuneTur", sql.NVarChar(25), it.tur)
-        .input("numuneAd", sql.NVarChar(150), it.numuneAdi ?? null)
-        .input("tarih", sql.Date, new Date())
-        .input("yol", sql.NVarChar(100), `pending:${it.fileName}`)
-        .input("talepNo", sql.Int, it.talepNo ?? null)
-        .input("firmaId", sql.Int, it.firmaId)
-        .input("durum", sql.NVarChar(5), "Aktif")
-        .input("raporId", sql.NVarChar(25), `R-${nextNo}`)
-        .input("yukleyenId", sql.Int, user.id)
-        .query<{ ID: number }>(
+        const id = await insertAndGetId(
+          conn,
           `INSERT INTO Rapor (RaporNo, FirmaAd, NumuneTur, NumuneAd, Tarih,
                               Yol, TalepNo, FirmaID, Durum, RaporID, YukleyenID)
-           OUTPUT INSERTED.ID
            VALUES (@raporNo, @firmaAd, @numuneTur, @numuneAd, @tarih,
-                   @yol, @talepNo, @firmaId, @durum, @raporId, @yukleyenId)`
+                   @yol, @talepNo, @firmaId, @durum, @raporId, @yukleyenId)`,
+          {
+            raporNo: nextNo,
+            firmaAd: firmaAd,
+            numuneTur: it.tur,
+            numuneAd: it.numuneAdi ?? null,
+            tarih: new Date(),
+            yol: `pending:${it.fileName}`,
+            talepNo: it.talepNo ?? null,
+            firmaId: it.firmaId,
+            durum: "Aktif",
+            raporId: `R-${nextNo}`,
+            yukleyenId: user.id,
+          }
         );
-      raporIds.push(ins.recordset[0].ID);
-      nextNo++;
-    }
-
-    await tx.commit();
+        raporIds.push(id);
+        nextNo++;
+      }
+    });
   } catch (err) {
-    await tx.rollback();
     return { error: userMessage(err, "Belgeler kaydedilemedi. Lütfen tekrar deneyin.") };
   }
 
@@ -136,10 +129,6 @@ export type NotifyState = {
   error?: string;
 };
 
-/**
- * Verilen Rapor ID'leri için firma bazında digest mail gönderir.
- * Her firmaya tek bir mail (digest), 30 rapor → 1 mail.
- */
 export async function notifyRaporlarAction(
   raporIds: number[]
 ): Promise<NotifyState> {
@@ -153,7 +142,6 @@ export async function notifyRaporlarAction(
     return { error: "Bildirim atılacak rapor yok." };
   }
 
-  // İlgili raporlar + firma bilgisi
   const placeholders = raporIds.map((_, i) => `@id${i}`).join(",");
   const params: Record<string, number> = {};
   raporIds.forEach((id, i) => (params[`id${i}`] = id));
@@ -175,7 +163,6 @@ export async function notifyRaporlarAction(
     params
   );
 
-  // Firma bazında grupla
   const buckets = new Map<
     number,
     {

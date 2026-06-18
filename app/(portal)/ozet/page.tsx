@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { requireUser } from "@/lib/auth";
-import { query, queryOne } from "@/lib/db";
+import { query, queryOne } from "@/lib/db-mysql";
 import { scopeByFirma, isAdmin } from "@/lib/permissions";
 import { formatTL, formatDate } from "@/lib/utils";
 import { PageHeader } from "@/components/page-header";
@@ -28,11 +28,8 @@ interface Stats {
 }
 
 interface ActionItems {
-  /** Müşterinin onayını bekleyen teklif sayısı */
   bekleyenTeklif: number;
-  /** Son 30 günde yayınlanan rapor sayısı */
   yeniRapor: number;
-  /** Analiz/işlem aşamasındaki (devam eden) talep sayısı */
   devamEdenTalep: number;
 }
 
@@ -56,13 +53,13 @@ async function loadStats(
   let bakiye = 0;
   if (isAdmin(user)) {
     const tot = await queryOne<{ toplam: number; odenen: number }>(
-      `SELECT ISNULL(SUM(Toplam),0) AS toplam, ISNULL(SUM(Odenen_Tutar),0) AS odenen FROM Fatura`
+      `SELECT IFNULL(SUM(Toplam),0) AS toplam, IFNULL(SUM(Odenen_Tutar),0) AS odenen FROM Fatura`
     );
     ciro = Number(tot?.toplam ?? 0);
     bakiye = ciro - Number(tot?.odenen ?? 0);
   } else {
     const tot = await queryOne<{ toplam: number; odenen: number }>(
-      `SELECT ISNULL(SUM(Toplam),0) AS toplam, ISNULL(SUM(Odenen_Tutar),0) AS odenen
+      `SELECT IFNULL(SUM(Toplam),0) AS toplam, IFNULL(SUM(Odenen_Tutar),0) AS odenen
        FROM Fatura WHERE FaturaFirmaID = @id`,
       { id: user.id }
     );
@@ -78,10 +75,6 @@ async function loadStats(
   };
 }
 
-/**
- * "Dikkat gerektirenler" — müşterinin aksiyon alması gereken sayılar.
- * Hatalı sorgu durumunda 0 dönsün diye her biri ayrı catch'li.
- */
 async function loadActionItems(
   user: Awaited<ReturnType<typeof requireUser>>
 ): Promise<ActionItems> {
@@ -90,8 +83,8 @@ async function loadActionItems(
 
   const bekleyenTeklif = await queryOne<{ n: number }>(
     `SELECT COUNT(*) AS n
-     FROM cosmoroot.TeklifBaslik tb
-     WHERE tb.Durum = 'Aktif' AND tb.TeklifDurum = N'Onay Bekleniyor' ${firmaFilter}`,
+     FROM TeklifBaslik tb
+     WHERE tb.Durum = 'Aktif' AND tb.TeklifDurum = 'Onay Bekleniyor' ${firmaFilter}`,
     params
   ).catch(() => ({ n: 0 }));
 
@@ -100,19 +93,18 @@ async function loadActionItems(
   const raporFilter = isAdmin(user) ? "" : "AND n.Firma_ID = @id";
   const yeniRapor = await queryOne<{ n: number }>(
     `SELECT COUNT(*) AS n
-     FROM cosmoroot.NKR_RaporOnay o
-     INNER JOIN dbo.NKR n ON n.ID = o.NkrID
-     WHERE o.YayinUrl IS NOT NULL AND LTRIM(RTRIM(o.YayinUrl)) <> ''
-       AND n.Durum = N'Aktif' AND o.YayinTarihi >= @since ${raporFilter}`,
+     FROM NKR_RaporOnay o
+     INNER JOIN NKR n ON n.ID = o.NkrID
+     WHERE o.YayinUrl IS NOT NULL AND TRIM(o.YayinUrl) <> ''
+       AND n.Durum = 'Aktif' AND o.YayinTarihi >= @since ${raporFilter}`,
     isAdmin(user) ? { since } : { since, id: user.id }
   ).catch(() => ({ n: 0 }));
 
-  // Devam eden talepler: Yeni Talep / işlem gören (Pasif/Tamamlandı dışı)
   const talepScope = scopeByFirma(user, "firmakodu");
   const devamEden = await queryOne<{ n: number }>(
     `SELECT COUNT(*) AS n FROM VIEW_TALEP_LISTE
      WHERE ${talepScope.clause}
-       AND Durum NOT IN (N'Tamamlandı', N'Raporlandı', N'İptal', N'Pasif')`,
+       AND Durum NOT IN ('Tamamlandı', 'Raporlandı', 'İptal', 'Pasif')`,
     talepScope.params
   ).catch(() => ({ n: 0 }));
 
@@ -135,10 +127,11 @@ async function loadRecentTalepler(
     "Müşteri": string | null;
     Durum: string | null;
   }>(
-    `SELECT TOP 8 ID, [Talep No], Tarih, [Talep Oluşturan], [Müşteri], Durum
+    `SELECT ID, \`Talep No\`, Tarih, \`Talep Oluşturan\`, \`Müşteri\`, Durum
      FROM VIEW_TALEP_LISTE
      WHERE ${scope.clause}
-     ORDER BY Tarih DESC, ID DESC`,
+     ORDER BY Tarih DESC, ID DESC
+     LIMIT 8`,
     scope.params
   );
 }
@@ -166,7 +159,6 @@ export default async function OzetPage() {
         }
       />
 
-      {/* Dikkat gerektirenler — yalnızca aksiyon varsa göster */}
       {(actions.bekleyenTeklif > 0 ||
         actions.yeniRapor > 0 ||
         stats.bakiye > 0) && (

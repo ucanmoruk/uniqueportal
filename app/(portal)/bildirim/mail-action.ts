@@ -1,7 +1,7 @@
 "use server";
 
 import { requireAdmin } from "@/lib/auth";
-import { query, queryOne } from "@/lib/db";
+import { query, queryOne } from "@/lib/db-mysql";
 import {
   sendEmail,
   injectNote,
@@ -84,15 +84,19 @@ export async function loadMailDraftAction(
       Firma_Adi: string | null;
       Mail: string | null;
     }>(
-      `SELECT TOP 1
+      `SELECT
           tb.ID,
-          COALESCE(tb.DisTeklifKodu, CONCAT('UQ', CAST(tb.TeklifNo AS varchar)))
-            + '/' + RIGHT('00' + CAST(tb.RevNo AS varchar), 2) AS TeklifNoText,
+          CONCAT(
+            COALESCE(tb.DisTeklifKodu, CONCAT('UQ', tb.TeklifNo)),
+            '/',
+            LPAD(tb.RevNo, 2, '0')
+          ) AS TeklifNoText,
           tb.Notlar,
           f.Firma_Adi, f.Mail
-       FROM cosmoroot.TeklifBaslik tb
-       LEFT JOIN dbo.Firma f ON f.ID = tb.MusteriID
-       WHERE tb.ID = @id`,
+       FROM TeklifBaslik tb
+       LEFT JOIN Firma f ON f.ID = tb.MusteriID
+       WHERE tb.ID = @id
+       LIMIT 1`,
       { id }
     );
     if (!t) return { error: "Teklif bulunamadı." };
@@ -139,8 +143,8 @@ export async function loadMailDraftAction(
       Mail: string | null;
     }>(
       `SELECT d.TalepID, d.BASLIK,
-              (SELECT TOP 1 MESAJ FROM DESTEK_DETAY
-               WHERE DESTEK_REF = d.TalepID ORDER BY DETAY_ID DESC) AS LastMessage,
+              (SELECT MESAJ FROM DESTEK_DETAY
+               WHERE DESTEK_REF = d.TalepID ORDER BY DETAY_ID DESC LIMIT 1) AS LastMessage,
               f.Firma_Adi, f.Mail
        FROM DESTEK d
        LEFT JOIN Firma f ON f.Kod = d.FirmaKodu

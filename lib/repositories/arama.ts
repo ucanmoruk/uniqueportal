@@ -1,4 +1,4 @@
-import { query } from "@/lib/db";
+import { query } from "@/lib/db-mysql";
 import { isAdmin } from "@/lib/permissions";
 import type { SessionUser } from "@/types/db";
 
@@ -13,11 +13,6 @@ export interface AramaSonuc {
   link: string;
 }
 
-/**
- * Tüm modüllerde (talep / teklif / rapor / fatura) birleşik arama.
- * Kullanıcının yetkisine göre kapsam uygulanır; her kaynaktan en fazla
- * `perSource` sonuç döner.
- */
 export async function aramaYap(
   user: SessionUser,
   terim: string,
@@ -28,7 +23,7 @@ export async function aramaYap(
   const like = `%${q}%`;
   const sonuclar: AramaSonuc[] = [];
 
-  // ---- Talepler (VIEW_TALEP_LISTE: Talep No, Müşteri, Talep Oluşturan) ----
+  // ---- Talepler ----
   try {
     const talepFilter = isAdmin(user)
       ? ""
@@ -39,10 +34,11 @@ export async function aramaYap(
       "Müşteri": string | null;
       Durum: string | null;
     }>(
-      `SELECT TOP ${perSource} ID, [Talep No], [Müşteri], Durum
+      `SELECT ID, \`Talep No\`, \`Müşteri\`, Durum
        FROM VIEW_TALEP_LISTE
-       WHERE ([Talep No] LIKE @like OR [Müşteri] LIKE @like) ${talepFilter}
-       ORDER BY Tarih DESC, ID DESC`,
+       WHERE (\`Talep No\` LIKE @like OR \`Müşteri\` LIKE @like) ${talepFilter}
+       ORDER BY Tarih DESC, ID DESC
+       LIMIT ${perSource}`,
       isAdmin(user) ? { like } : { like, kod: user.kod }
     );
     for (const t of talepler) {
@@ -59,7 +55,7 @@ export async function aramaYap(
     /* kaynak hatası diğerlerini engellemesin */
   }
 
-  // ---- Teklifler (cosmoroot.TeklifBaslik) ----
+  // ---- Teklifler ----
   try {
     const teklifFilter = isAdmin(user) ? "" : "AND tb.MusteriID = @id";
     const teklifler = await query<{
@@ -68,24 +64,28 @@ export async function aramaYap(
       MusteriAd: string | null;
       TeklifDurum: string | null;
     }>(
-      `SELECT TOP ${perSource}
+      `SELECT
          tb.ID,
-         COALESCE(tb.DisTeklifKodu, CONCAT('UQ', CAST(tb.TeklifNo AS varchar)))
-           + '/' + RIGHT('00' + CAST(tb.RevNo AS varchar), 2) AS TeklifNoText,
+         CONCAT(
+           COALESCE(tb.DisTeklifKodu, CONCAT('UQ', tb.TeklifNo)),
+           '/',
+           LPAD(tb.RevNo, 2, '0')
+         ) AS TeklifNoText,
          m.Firma_Adi AS MusteriAd,
          tb.TeklifDurum
-       FROM cosmoroot.TeklifBaslik tb
-       LEFT JOIN dbo.Firma m ON m.ID = tb.MusteriID
+       FROM TeklifBaslik tb
+       LEFT JOIN Firma m ON m.ID = tb.MusteriID
        WHERE tb.Durum = 'Aktif'
          AND (tb.TeklifDurum IS NULL OR tb.TeklifDurum NOT IN ('Taslak','Hazırlanıyor','Hazirlaniyor','Draft'))
          AND (
            tb.DisTeklifKodu LIKE @like
-           OR CAST(tb.TeklifNo AS varchar) LIKE @like
+           OR CAST(tb.TeklifNo AS CHAR) LIKE @like
            OR m.Firma_Adi LIKE @like
            OR tb.TeklifKonusu LIKE @like
          )
          ${teklifFilter}
-       ORDER BY tb.Tarih DESC, tb.ID DESC`,
+       ORDER BY tb.Tarih DESC, tb.ID DESC
+       LIMIT ${perSource}`,
       isAdmin(user) ? { like } : { like, id: user.id }
     );
     for (const t of teklifler) {
@@ -102,41 +102,7 @@ export async function aramaYap(
     /* yoksay */
   }
 
-  // ---- Raporlar (VIEW_RAPOR) — şu an devre dışı, migrasyon sonrası aktifleşecek ----
-  // try {
-  //   const raporFilter = isAdmin(user)
-  //     ? ""
-  //     : "AND ([Müşteri] = @firma OR Proje = @firma)";
-  //   const raporlar = await query<{
-  //     ID: number;
-  //     RaporID: string | null;
-  //     "Dosya No": number;
-  //     "Dosya Adı": string | null;
-  //     "Müşteri": string | null;
-  //   }>(
-  //     `SELECT TOP ${perSource} ID, RaporID, [Dosya No], [Dosya Adı], [Müşteri]
-  //      FROM VIEW_RAPOR
-  //      WHERE Durum = 'Aktif'
-  //        AND (RaporID LIKE @like OR [Dosya Adı] LIKE @like OR [Müşteri] LIKE @like)
-  //        ${raporFilter}
-  //      ORDER BY Tarih DESC, ID DESC`,
-  //     isAdmin(user) ? { like } : { like, firma: user.firmaAdi ?? "" }
-  //   );
-  //   for (const r of raporlar) {
-  //     sonuclar.push({
-  //       type: "rapor",
-  //       id: r.ID,
-  //       baslik: r.RaporID ?? `UQ${r["Dosya No"]}`,
-  //       altBaslik: r["Dosya Adı"] ?? r["Müşteri"],
-  //       durum: null,
-  //       link: `/belgeler`,
-  //     });
-  //   }
-  // } catch {
-  //   /* yoksay */
-  // }
-
-  // ---- NKR Raporları (Numune/Ürün adı ile arama) ----
+  // ---- NKR Raporları ----
   try {
     const nkrFilter = isAdmin(user)
       ? ""
@@ -150,20 +116,21 @@ export async function aramaYap(
       NumuneAd: string | null;
       MusteriAd: string | null;
     }>(
-      `SELECT TOP ${perSource}
+      `SELECT
          -o.ID AS OnayID,
          n.RaporNo,
          n.Numune_Adi AS NumuneAd,
          f.Firma_Adi AS MusteriAd
-       FROM cosmoroot.NKR_RaporOnay o
-       INNER JOIN dbo.NKR n ON n.ID = o.NkrID
-       LEFT JOIN dbo.Firma f ON f.ID = n.Firma_ID
+       FROM NKR_RaporOnay o
+       INNER JOIN NKR n ON n.ID = o.NkrID
+       LEFT JOIN Firma f ON f.ID = n.Firma_ID
        WHERE o.YayinUrl IS NOT NULL
-         AND LTRIM(RTRIM(o.YayinUrl)) <> ''
-         AND n.Durum = N'Aktif'
-         AND (n.Numune_Adi LIKE @like OR f.Firma_Adi LIKE @like OR CAST(n.RaporNo AS varchar) LIKE @like)
+         AND TRIM(o.YayinUrl) <> ''
+         AND n.Durum = 'Aktif'
+         AND (n.Numune_Adi LIKE @like OR f.Firma_Adi LIKE @like OR CAST(n.RaporNo AS CHAR) LIKE @like)
          ${nkrFilter}
-       ORDER BY o.YayinTarihi DESC, o.ID DESC`,
+       ORDER BY o.YayinTarihi DESC, o.ID DESC
+       LIMIT ${perSource}`,
       nkrParams
     );
     for (const r of nkrRaporlar) {
@@ -180,22 +147,23 @@ export async function aramaYap(
     /* yoksay */
   }
 
-  // ---- Faturalar (VIEW_FATURA) ----
+  // ---- Faturalar ----
   try {
     const faturaFilter = isAdmin(user)
       ? ""
-      : "AND ([Müşteri] = @firma OR Proje = @firma)";
+      : "AND (`Müşteri` = @firma OR Proje = @firma)";
     const faturalar = await query<{
       ID: number;
       "Fatura No": string;
       "Müşteri": string | null;
       Durum: string | null;
     }>(
-      `SELECT TOP ${perSource} ID, [Fatura No], [Müşteri], Durum
+      `SELECT ID, \`Fatura No\`, \`Müşteri\`, Durum
        FROM VIEW_FATURA
-       WHERE ([Fatura No] LIKE @like OR [Müşteri] LIKE @like)
+       WHERE (\`Fatura No\` LIKE @like OR \`Müşteri\` LIKE @like)
          ${faturaFilter}
-       ORDER BY Tarih DESC, ID DESC`,
+       ORDER BY Tarih DESC, ID DESC
+       LIMIT ${perSource}`,
       isAdmin(user) ? { like } : { like, firma: user.firmaAdi ?? "" }
     );
     for (const f of faturalar) {

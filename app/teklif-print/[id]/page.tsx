@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import { requireUser } from "@/lib/auth";
-import { query, queryOne } from "@/lib/db";
+import { query, queryOne } from "@/lib/db-mysql";
 import { isAdmin } from "@/lib/permissions";
 import TeklifPrintDocument, {
   type TeklifHeader,
@@ -12,12 +12,6 @@ import { TeklifOnayButton } from "@/components/teklif-onay-button";
 /**
  * Müşteri tarafına çıkan teklif yazdırma sayfası.
  * Veri sözleşmesi: docs/musteri-portali-teklif-sozlesmesi.md (§3-7).
- *
- * - Sahiplik kontrolü: müşteri ise `TeklifBaslik.MusteriID = user.id` ŞART.
- * - Taslak görünmez (`TeklifDurum NOT IN ('Taslak', ...)`).
- * - URL parametresi `id` = `TeklifBaslik.ID`. (Spec'te DisTeklifKodu önerilir;
- *   şu an portal listede ID üzerinden ilerliyor, sahiplik kontrolü zorunlu
- *   olduğu için pratikte enumerasyon riski yok.)
  */
 export const dynamic = "force-dynamic";
 
@@ -34,7 +28,6 @@ interface RawBaslik {
   GenelIskonto: string | number | null;
   TeklifDurum: string | null;
   MusteriID: number | null;
-  // Firma JOIN
   MusteriAd: string | null;
   MusteriAdres: string | null;
   MusteriTelefon: string | null;
@@ -76,7 +69,7 @@ export default async function TeklifPrintPage({
   const user = await requireUser();
 
   const baslik = await queryOne<RawBaslik>(
-    `SELECT TOP 1
+    `SELECT
         tb.ID, tb.TeklifNo, tb.DisTeklifKodu, tb.RevNo, tb.Tarih,
         tb.Notlar, tb.TeklifKonusu, tb.TeklifVeren,
         tb.KdvOran, tb.GenelIskonto, tb.TeklifDurum, tb.MusteriID,
@@ -87,24 +80,24 @@ export default async function TeklifPrintPage({
         f.Yetkili    AS MusteriYetkili,
         f.Vergi_Dairesi AS VergiDairesi,
         f.Vergi_No      AS VergiNo
-     FROM cosmoroot.TeklifBaslik tb
-     LEFT JOIN dbo.Firma f ON f.ID = tb.MusteriID
+     FROM TeklifBaslik tb
+     LEFT JOIN Firma f ON f.ID = tb.MusteriID
      WHERE tb.ID = @id
        AND tb.Durum = 'Aktif'
-       AND (tb.TeklifDurum IS NULL OR tb.TeklifDurum NOT IN ('Taslak','Hazırlanıyor','Hazirlaniyor','Draft'))`,
+       AND (tb.TeklifDurum IS NULL OR tb.TeklifDurum NOT IN ('Taslak','Hazırlanıyor','Hazirlaniyor','Draft'))
+     LIMIT 1`,
     { id: numId }
   );
 
   if (!baslik) notFound();
 
-  // Sahiplik kontrolü: müşteri/proje ise MusteriID = user.id şart.
   if (!isAdmin(user) && baslik.MusteriID !== user.id) {
     notFound();
   }
 
   const kalemler = await query<RawKalem>(
     `SELECT HizmetAdi, Adet, Fiyat, ParaBirimi, Iskonto, Metot, Akreditasyon, Notlar
-     FROM cosmoroot.TeklifKalem
+     FROM TeklifKalem
      WHERE TeklifID = @id
      ORDER BY ID`,
     { id: baslik.ID }

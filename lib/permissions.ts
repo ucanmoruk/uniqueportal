@@ -59,13 +59,13 @@ export function scopeByFirma(
   if (!user.firmaAdi) return NONE;
   if (user.tur === "Proje") {
     return {
-      clause: '(Proje = @scope_firma OR [Müşteri] = @scope_firma)',
+      clause: '(Proje = @scope_firma OR `Müşteri` = @scope_firma)',
       params: { scope_firma: user.firmaAdi },
     };
   }
   // Müşteri / diğer
   return {
-    clause: '[Müşteri] = @scope_firma',
+    clause: '`Müşteri` = @scope_firma',
     params: { scope_firma: user.firmaAdi },
   };
 }

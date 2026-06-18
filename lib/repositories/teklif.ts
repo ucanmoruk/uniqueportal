@@ -1,21 +1,9 @@
-import { query, queryOne } from "@/lib/db";
+import { query, queryOne } from "@/lib/db-mysql";
 import { isAdmin } from "@/lib/permissions";
 import type { SessionUser } from "@/types/db";
 
-/**
- * Teklif veri katmanı — yeni `TeklifBaslik` / `TeklifKalem` modeli üzerinde
- * çalışır. Eski `TeklifX1` / `VIEW_TEKLIFLERIM` kaynakları artık kullanılmıyor.
- *
- * Müşteri portalında **sadece "gönderilmiş" teklifler** görünür: teklif başka
- * bir portalda taslak olarak hazırlanır, "Gönder" tetiklenince durumu değişir.
- * Bu nedenle "Taslak" / "Hazırlanıyor" durumlarındaki kayıtlar burada
- * süzülerek hariç tutulur.
- */
-
-/** Müşteri portalında gizlenecek (henüz gönderilmemiş) durumlar. */
 const DRAFT_DURUMLAR = ["Taslak", "Hazırlanıyor", "Hazirlaniyor", "Draft"];
 
-/** Listeleme satırı — UI tarafındaki TeklifListItem ile aynı şekil. */
 export interface TeklifListItem {
   ID: number;
   "Teklif No": string;
@@ -53,15 +41,18 @@ function mapList(rows: RawListRow[]): TeklifListItem[] {
 const SELECT_LIST = `
   SELECT
     tb.ID,
-    COALESCE(tb.DisTeklifKodu, CONCAT('UQ', CAST(tb.TeklifNo AS varchar)))
-      + '/' + RIGHT('00' + CAST(tb.RevNo AS varchar), 2) AS TeklifNoText,
+    CONCAT(
+      COALESCE(tb.DisTeklifKodu, CONCAT('UQ', tb.TeklifNo)),
+      '/',
+      LPAD(tb.RevNo, 2, '0')
+    ) AS TeklifNoText,
     tb.Tarih,
     tb.TeklifKonusu,
     m.Firma_Adi AS MusteriAdi,
     tb.Notlar,
     tb.TeklifDurum
-  FROM cosmoroot.TeklifBaslik tb
-  LEFT JOIN dbo.Firma m ON m.ID = tb.MusteriID
+  FROM TeklifBaslik tb
+  LEFT JOIN Firma m ON m.ID = tb.MusteriID
 `;
 
 const VISIBILITY_WHERE = `
@@ -69,7 +60,7 @@ const VISIBILITY_WHERE = `
   AND (tb.TeklifDurum IS NULL OR tb.TeklifDurum NOT IN ('Taslak','Hazırlanıyor','Hazirlaniyor','Draft'))
 `;
 
-void DRAFT_DURUMLAR; // referans amaçlı — UI ve gelecekteki filtreler için
+void DRAFT_DURUMLAR;
 
 export async function listTeklifler(
   user: SessionUser
@@ -84,8 +75,6 @@ export async function listTeklifler(
   }
 
   if (user.tur === "Plasiyer") {
-    // Yeni şemada teklif başlığında Plasiyer alanı yok.
-    // Plasiyer, kendi sorumlu olduğu firmaların tekliflerini görür.
     if (user.plasiyerId == null) return [];
     const rows = await query<RawListRow>(
       `${SELECT_LIST}
@@ -97,7 +86,6 @@ export async function listTeklifler(
     return mapList(rows);
   }
 
-  // Müşteri / Proje: yalnızca kendi firmasına kesilmiş teklifler.
   const rows = await query<RawListRow>(
     `${SELECT_LIST}
      WHERE ${VISIBILITY_WHERE}
@@ -108,10 +96,9 @@ export async function listTeklifler(
   return mapList(rows);
 }
 
-/** Detay başlığı — eski API ile uyumlu kalır. */
 export interface TeklifBaslik {
   ID: number;
-  TeklifNo: string; // DisTeklifKodu/RevNo formatında gösterim
+  TeklifNo: string;
   TeklifTuru: string | null;
   Tarih: Date | null;
   ParaBirimi: string | null;
@@ -123,7 +110,6 @@ export interface TeklifBaslik {
   FirmaAdres: string | null;
   Telefon: string | null;
   Mail: string | null;
-  // --- yeni alanlar (mevcut sayfalarda opsiyonel kullanılır) ---
   TeklifKonusu: string | null;
   TeklifVeren: string | null;
   Toplam: number | null;
@@ -197,31 +183,24 @@ function toNum(v: string | number | null | undefined): number {
   return Number.isFinite(n) ? n : 0;
 }
 
-/**
- * Detayı `TeklifBaslik.ID` üzerinden döndürür.
- *
- * NOT: Eski API `getTeklifDetail(teklifNo: number)` imzasıyla çalışıyordu.
- * Yeni şemada TeklifNo benzersiz değil (RevNo ile birlikte anlamlı). Geriye
- * uyumluluk için sayısal alındığında `TeklifBaslik.ID` olarak yorumluyoruz —
- * sayfalar zaten listede gelen ID'yi gönderiyor.
- */
 export async function getTeklifDetail(idOrTeklifNo: number) {
   const row = await queryOne<RawBaslikRow>(
-    `SELECT TOP 1
+    `SELECT
         tb.ID, tb.TeklifNo, tb.DisTeklifKodu, tb.RevNo, tb.MusteriID,
         tb.Tarih, tb.Toplam, tb.Notlar, tb.TeklifDurum, tb.KdvOran,
         tb.TeklifKonusu, tb.TeklifVeren, tb.GenelIskonto,
         m.Firma_Adi, m.Adres AS FirmaAdres, m.Telefon, m.Mail
-     FROM cosmoroot.TeklifBaslik tb
-     LEFT JOIN dbo.Firma m ON m.ID = tb.MusteriID
-     WHERE tb.ID = @id AND tb.Durum = 'Aktif'`,
+     FROM TeklifBaslik tb
+     LEFT JOIN Firma m ON m.ID = tb.MusteriID
+     WHERE tb.ID = @id AND tb.Durum = 'Aktif'
+     LIMIT 1`,
     { id: idOrTeklifNo }
   );
   if (!row) return { baslik: null, satirlar: [] as TeklifSatir[] };
 
   const kalemler = await query<RawKalemRow>(
     `SELECT ID, HizmetAdi, Metot, Akreditasyon, Fiyat, Adet, Iskonto, ParaBirimi
-     FROM cosmoroot.TeklifKalem
+     FROM TeklifKalem
      WHERE TeklifID = @id
      ORDER BY ID`,
     { id: row.ID }
@@ -272,16 +251,12 @@ export async function getTeklifDetail(idOrTeklifNo: number) {
   return { baslik, satirlar };
 }
 
-/**
- * Listede tıklanan ID'nin gerçek bir teklife karşılık geldiğini doğrular.
- * Yeni şemada list ve detail aynı PK'i kullandığı için bu sadece varlık
- * kontrolüdür — eski imzayı korumak için `TeklifNo` döndürür (= ID).
- */
 export async function findTeklifByListId(id: number) {
   const r = await queryOne<{ ID: number }>(
-    `SELECT TOP 1 ID FROM cosmoroot.TeklifBaslik
+    `SELECT ID FROM TeklifBaslik
      WHERE ID = @id AND Durum = 'Aktif'
-       AND (TeklifDurum IS NULL OR TeklifDurum NOT IN ('Taslak','Hazırlanıyor','Hazirlaniyor','Draft'))`,
+       AND (TeklifDurum IS NULL OR TeklifDurum NOT IN ('Taslak','Hazırlanıyor','Hazirlaniyor','Draft'))
+     LIMIT 1`,
     { id }
   );
   return r ? { TeklifNo: r.ID } : null;

@@ -1,4 +1,4 @@
-import { query, queryOne } from "@/lib/db";
+import { query, queryOne } from "@/lib/db-mysql";
 import { isAdmin, scopeByFirma } from "@/lib/permissions";
 import type { SessionUser } from "@/types/db";
 
@@ -12,21 +12,9 @@ export interface RaporListItem {
   "Dosya Türü": string | null;
   "Dosya Adı": string | null;
   RaporID: string | null;
-  /**
-   * Görüntüle linki. Eğer http(s):// ile başlıyorsa dış URL olarak yeni sekmede
-   * açılır (NKR_RaporOnay.YayinUrl). Aksi takdirde `/api/belge/[ID]` kullanılır
-   * (manuel yüklenen PDF).
-   */
   Yol: string | null;
 }
 
-/**
- * Yayınlanmış NKR raporları (NKR_RaporOnay.YayinUrl).
- *
- * NOT: VIEW_RAPOR verileri şu an portalda gösterilmiyor.
- * listManuelRaporlar() fonksiyonu ileride VIEW_RAPOR → NKR migrasyonu
- * tamamlandığında kaldırılacak; şimdilik korunuyor.
- */
 export async function listRaporlar(
   user: SessionUser
 ): Promise<RaporListItem[]> {
@@ -38,16 +26,16 @@ async function listManuelRaporlar(
 ): Promise<RaporListItem[]> {
   if (isAdmin(user)) {
     return query<RaporListItem>(
-      `SELECT ID, Tarih, [Dosya No], TalepNo, [Müşteri], Proje,
-              [Dosya Türü], [Dosya Adı], RaporID, Yol
+      `SELECT ID, Tarih, \`Dosya No\`, TalepNo, \`Müşteri\`, Proje,
+              \`Dosya Türü\`, \`Dosya Adı\`, RaporID, Yol
        FROM VIEW_RAPOR WHERE Durum = 'Aktif'
        ORDER BY Tarih DESC, ID DESC`
     );
   }
   if (user.tur === "Plasiyer") {
     return query<RaporListItem>(
-      `SELECT ID, Tarih, [Dosya No], TalepNo, [Müşteri], Proje,
-              [Dosya Türü], [Dosya Adı], RaporID, Yol
+      `SELECT ID, Tarih, \`Dosya No\`, TalepNo, \`Müşteri\`, Proje,
+              \`Dosya Türü\`, \`Dosya Adı\`, RaporID, Yol
        FROM VIEW_RAPOR
        WHERE Durum = 'Aktif' AND PlasiyerID = @pid
        ORDER BY Tarih DESC, ID DESC`,
@@ -56,8 +44,8 @@ async function listManuelRaporlar(
   }
   const scope = scopeByFirma(user, "musteri-proje");
   return query<RaporListItem>(
-    `SELECT ID, Tarih, [Dosya No], TalepNo, [Müşteri], Proje,
-            [Dosya Türü], [Dosya Adı], RaporID, Yol
+    `SELECT ID, Tarih, \`Dosya No\`, TalepNo, \`Müşteri\`, Proje,
+            \`Dosya Türü\`, \`Dosya Adı\`, RaporID, Yol
      FROM VIEW_RAPOR
      WHERE Durum = 'Aktif' AND ${scope.clause}
      ORDER BY Tarih DESC, ID DESC`,
@@ -77,11 +65,6 @@ interface NkrRaw {
   YayinUrl: string | null;
 }
 
-/**
- * NKR_RaporOnay tablosundan yayınlanmış raporları çeker. Sadece YayinUrl dolu
- * olanlar listeye girer. ID alanı çakışmaması için negatif aralık (-OnayID)
- * kullanırız — manuel rapor ID'leri pozitif.
- */
 async function listYayinlanmisNkrRaporlari(
   user: SessionUser
 ): Promise<RaporListItem[]> {
@@ -89,19 +72,19 @@ async function listYayinlanmisNkrRaporlari(
     SELECT
       -o.ID AS OnayID, n.ID AS NkrID,
       o.YayinTarihi AS Tarih,
-      n.RaporNo, TRY_CAST(n.Talep_No AS INT) AS TalepNo,
+      n.RaporNo, CAST(n.Talep_No AS SIGNED) AS TalepNo,
       f.Firma_Adi AS MusteriAd,
       o.RaporFormati,
       n.Numune_Adi AS NumuneAd,
       o.YayinUrl
-    FROM cosmoroot.NKR_RaporOnay o
-    INNER JOIN dbo.NKR n ON n.ID = o.NkrID
-    LEFT JOIN dbo.Firma f ON f.ID = n.Firma_ID
+    FROM NKR_RaporOnay o
+    INNER JOIN NKR n ON n.ID = o.NkrID
+    LEFT JOIN Firma f ON f.ID = n.Firma_ID
   `;
   const WHERE_BASE = `
     o.YayinUrl IS NOT NULL
-    AND LTRIM(RTRIM(o.YayinUrl)) <> ''
-    AND n.Durum = N'Aktif'
+    AND TRIM(o.YayinUrl) <> ''
+    AND n.Durum = 'Aktif'
   `;
 
   let rows: NkrRaw[];
@@ -110,7 +93,6 @@ async function listYayinlanmisNkrRaporlari(
       `${SELECT} WHERE ${WHERE_BASE} ORDER BY o.YayinTarihi DESC, o.ID DESC`
     );
   } else if (user.tur === "Plasiyer") {
-    // NKR'de PlasiyerID yok; firma üzerinden eşleştir
     rows = await query<NkrRaw>(
       `${SELECT}
        WHERE ${WHERE_BASE} AND f.PlasiyerID = @pid
@@ -118,7 +100,6 @@ async function listYayinlanmisNkrRaporlari(
       { pid: user.plasiyerId ?? -1 }
     );
   } else {
-    // Müşteri / Proje: kendi firmaları
     rows = await query<NkrRaw>(
       `${SELECT}
        WHERE ${WHERE_BASE} AND n.Firma_ID = @firmaId
@@ -128,7 +109,7 @@ async function listYayinlanmisNkrRaporlari(
   }
 
   return rows.map((r) => ({
-    ID: r.OnayID, // negatif: manuel ID'lerle çakışmaz
+    ID: r.OnayID,
     Tarih: r.Tarih,
     "Dosya No": r.RaporNo ?? r.NkrID,
     TalepNo: r.TalepNo,
@@ -148,9 +129,10 @@ export async function findRaporForUser(
   if (raporId < 0) return findNkrRaporForUser(user, -raporId);
 
   const r = await queryOne<RaporListItem>(
-    `SELECT TOP 1 ID, Tarih, [Dosya No], TalepNo, [Müşteri], Proje,
-            [Dosya Türü], [Dosya Adı], RaporID, Yol
-     FROM VIEW_RAPOR WHERE ID = @id AND Durum = 'Aktif'`,
+    `SELECT ID, Tarih, \`Dosya No\`, TalepNo, \`Müşteri\`, Proje,
+            \`Dosya Türü\`, \`Dosya Adı\`, RaporID, Yol
+     FROM VIEW_RAPOR WHERE ID = @id AND Durum = 'Aktif'
+     LIMIT 1`,
     { id: raporId }
   );
   if (!r) return null;
@@ -181,22 +163,23 @@ async function findNkrRaporForUser(
     FirmaID: number | null;
   }
   const r = await queryOne<NkrRow>(
-    `SELECT TOP 1
+    `SELECT
        o.ID AS OnayID, n.ID AS NkrID,
        o.YayinTarihi AS Tarih,
-       n.RaporNo, TRY_CAST(n.Talep_No AS INT) AS TalepNo,
+       n.RaporNo, CAST(n.Talep_No AS SIGNED) AS TalepNo,
        f.Firma_Adi AS MusteriAd,
        o.RaporFormati,
        n.Numune_Adi AS NumuneAd,
        o.YayinUrl,
        n.Firma_ID AS FirmaID
-     FROM cosmoroot.NKR_RaporOnay o
-     INNER JOIN dbo.NKR n ON n.ID = o.NkrID
-     LEFT JOIN dbo.Firma f ON f.ID = n.Firma_ID
+     FROM NKR_RaporOnay o
+     INNER JOIN NKR n ON n.ID = o.NkrID
+     LEFT JOIN Firma f ON f.ID = n.Firma_ID
      WHERE o.ID = @oid
        AND o.YayinUrl IS NOT NULL
-       AND LTRIM(RTRIM(o.YayinUrl)) <> ''
-       AND n.Durum = N'Aktif'`,
+       AND TRIM(o.YayinUrl) <> ''
+       AND n.Durum = 'Aktif'
+     LIMIT 1`,
     { oid: onayId }
   );
   if (!r) return null;

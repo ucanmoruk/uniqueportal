@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { requireUser } from "@/lib/auth";
-import { query, queryOne } from "@/lib/db";
+import { query, queryOne } from "@/lib/db-mysql";
 import { isAdmin } from "@/lib/permissions";
 
 export type IptalResult =
@@ -30,7 +30,7 @@ export async function iptalTalepAction(
     FirmaKodu: string | null;
     Durum: string | null;
   }>(
-    `SELECT TOP 1 ID, FirmaKodu, Durum FROM Talep WHERE ID = @id`,
+    `SELECT ID, FirmaKodu, Durum FROM Talep WHERE ID = @id LIMIT 1`,
     { id: talepId }
   );
   if (!row) return { ok: false, error: "Talep bulunamadı." };
