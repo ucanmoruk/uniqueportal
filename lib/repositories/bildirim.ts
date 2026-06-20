@@ -514,3 +514,149 @@ export function countUnread(bildirimler: Bildirim[], lastSeen: Date | null): num
   if (!lastSeen) return bildirimler.length;
   return bildirimler.filter((b) => b.tarih > lastSeen).length;
 }
+
+/**
+ * Okunmamış bildirim SAYISINI tek sorguda döner — periyodik poll için.
+ *
+ * getBildirimler tüm satırları (8 sorgu, ~270 satır) çekip JS'de obje kurup
+ * sayardı; bu fonksiyon aynı WHERE koşullarını COUNT(*) subquery'leri olarak
+ * tek SELECT'te toplar. Davranış birebir aynı (rozet >9 için "9+" gösterir),
+ * yük ~10 kat düşer ve havuzdan tek bağlantı kullanır.
+ */
+export async function countUnreadBildirim(
+  user: SessionUser,
+  lastSeen: Date | null,
+  sinceDays = 30
+): Promise<number> {
+  const since = new Date();
+  since.setDate(since.getDate() - sinceDays);
+
+  // Okunmamış = tarih > lastSeen, 30 günlük pencere içinde.
+  // Eşik: lastSeen pencere başından yeniyse onu (strict >), değilse pencere
+  // başını (1ms öncesi → > ile inclusive) kullan.
+  const threshold =
+    lastSeen && lastSeen > since ? lastSeen : new Date(since.getTime() - 1);
+
+  const admin = isAdmin(user);
+  const subs: string[] = [];
+  const params: Record<string, string | number | Date | null> = {
+    th: threshold,
+  };
+
+  if (admin) {
+    // ---- Rapor ----
+    subs.push(
+      `(SELECT COUNT(*) FROM Rapor WHERE Durum='Aktif' AND Tarih > @th)`
+    );
+    // ---- Teklif ----
+    subs.push(
+      `(SELECT COUNT(*) FROM TeklifBaslik tb
+        WHERE tb.Durum='Aktif'
+          AND (tb.TeklifDurum IS NULL OR tb.TeklifDurum NOT IN ('Taslak','Hazırlanıyor','Hazirlaniyor','Draft'))
+          AND tb.Tarih > @th)`
+    );
+    // ---- Fatura ----
+    subs.push(`(SELECT COUNT(*) FROM Fatura WHERE Tarih > @th)`);
+    // ---- Talep durum ----
+    subs.push(
+      `(SELECT COUNT(*) FROM TalepDurumLog l
+        INNER JOIN Talep t ON t.ID = l.TalepID
+        WHERE l.Tarih > @th AND l.YeniDurum <> 'Pasif' AND t.Durum <> 'Pasif'
+          AND (t.Tur IS NULL OR t.Tur <> 'Destek'))`
+    );
+    // ---- Rapor yayını ----
+    subs.push(
+      `(SELECT COUNT(*) FROM NKR_RaporOnay o
+        INNER JOIN NKR n ON n.ID = o.NkrID
+        WHERE o.YayinTarihi > @th AND o.YayinUrl IS NOT NULL AND TRIM(o.YayinUrl) <> ''
+          AND n.Durum = 'Aktif')`
+    );
+    // ---- Numune kabul (NKR) ----
+    subs.push(
+      `(SELECT COUNT(*) FROM NKR n
+        WHERE n.Durum='Aktif' AND (n.Rapor_Durumu IS NULL OR n.Rapor_Durumu <> 'Raporlandı')
+          AND n.Tarih > @th)`
+    );
+    // ---- Numune analiz (LabKabul) ----
+    subs.push(
+      `(SELECT COUNT(*) FROM NKR_LabKabul k
+        INNER JOIN NKR n ON n.ID = k.NkrID
+        WHERE n.Durum='Aktif' AND (n.Rapor_Durumu IS NULL OR n.Rapor_Durumu <> 'Raporlandı')
+          AND COALESCE(k.OlusturmaTarihi, k.KabulTarihi, n.Tarih) > @th)`
+    );
+    // ---- Destek: yeni ticket ----
+    subs.push(`(SELECT COUNT(*) FROM DESTEK d WHERE d.Tarih > @th)`);
+    // ---- Destek: müşteri yanıtı ----
+    subs.push(
+      `(SELECT COUNT(*) FROM DESTEK_DETAY dd
+        INNER JOIN DESTEK d ON d.TalepID = dd.DESTEK_REF
+        LEFT JOIN Firma f ON f.ID = dd.KAYIT_EDEN
+        WHERE f.Tur <> 'Admin' AND CAST(dd.MESAJ_TARIHI AS DATETIME) > @th)`
+    );
+  } else {
+    params.firma = user.firmaAdi ?? null;
+    params.firmaId = user.id;
+    params.kod = user.kod ?? null;
+
+    // ---- Rapor ----
+    subs.push(
+      `(SELECT COUNT(*) FROM Rapor
+        WHERE Durum='Aktif' AND Tarih > @th AND (FirmaAd = @firma OR Proje = @firma))`
+    );
+    // ---- Teklif ----
+    subs.push(
+      `(SELECT COUNT(*) FROM TeklifBaslik tb
+        WHERE tb.Durum='Aktif'
+          AND (tb.TeklifDurum IS NULL OR tb.TeklifDurum NOT IN ('Taslak','Hazırlanıyor','Hazirlaniyor','Draft'))
+          AND tb.Tarih > @th AND tb.MusteriID = @firmaId)`
+    );
+    // ---- Fatura ----
+    subs.push(
+      `(SELECT COUNT(*) FROM Fatura
+        WHERE Tarih > @th AND (FaturaFirmaID = @firmaId OR Proje_ID = @firmaId))`
+    );
+    // ---- Talep durum ----
+    subs.push(
+      `(SELECT COUNT(*) FROM TalepDurumLog l
+        INNER JOIN Talep t ON t.ID = l.TalepID
+        WHERE l.Tarih > @th AND l.YeniDurum <> 'Pasif' AND t.Durum <> 'Pasif'
+          AND (t.Tur IS NULL OR t.Tur <> 'Destek') AND t.FirmaKodu = @kod)`
+    );
+    // ---- Rapor yayını ----
+    subs.push(
+      `(SELECT COUNT(*) FROM NKR_RaporOnay o
+        INNER JOIN NKR n ON n.ID = o.NkrID
+        WHERE o.YayinTarihi > @th AND o.YayinUrl IS NOT NULL AND TRIM(o.YayinUrl) <> ''
+          AND n.Durum = 'Aktif' AND n.Firma_ID = @firmaId)`
+    );
+    // ---- Numune kabul (NKR) ----
+    subs.push(
+      `(SELECT COUNT(*) FROM NKR n
+        WHERE n.Durum='Aktif' AND (n.Rapor_Durumu IS NULL OR n.Rapor_Durumu <> 'Raporlandı')
+          AND n.Tarih > @th AND n.Firma_ID = @firmaId)`
+    );
+    // ---- Numune analiz (LabKabul) ----
+    subs.push(
+      `(SELECT COUNT(*) FROM NKR_LabKabul k
+        INNER JOIN NKR n ON n.ID = k.NkrID
+        WHERE n.Durum='Aktif' AND (n.Rapor_Durumu IS NULL OR n.Rapor_Durumu <> 'Raporlandı')
+          AND COALESCE(k.OlusturmaTarihi, k.KabulTarihi, n.Tarih) > @th
+          AND n.Firma_ID = @firmaId)`
+    );
+    // ---- Destek: admin yanıtı ----
+    subs.push(
+      `(SELECT COUNT(*) FROM DESTEK_DETAY dd
+        INNER JOIN DESTEK d ON d.TalepID = dd.DESTEK_REF
+        LEFT JOIN Firma f ON f.ID = dd.KAYIT_EDEN
+        WHERE d.FirmaKodu = @kod AND (f.Kod IS NULL OR f.Kod <> @kod)
+          AND CAST(dd.MESAJ_TARIHI AS DATETIME) > @th)`
+    );
+  }
+
+  const row = await queryOne<Record<string, number>>(
+    `SELECT ${subs.map((s, i) => `${s} AS c${i}`).join(", ")}`,
+    params
+  );
+  if (!row) return 0;
+  return Object.values(row).reduce((sum, n) => sum + Number(n ?? 0), 0);
+}
