@@ -99,7 +99,23 @@ async function listYayinlanmisNkrRaporlari(
        ORDER BY o.YayinTarihi DESC, o.ID DESC`,
       { pid: user.plasiyerId ?? -1 }
     );
+  } else if (user.tur === "Proje") {
+    // Proje firması: hem kendi numuneleri (Firma_ID) hem de müşterilerinin
+    // numuneleri (NumuneDetay.ProjeID üzerinden bu firmaya bağlananlar).
+    rows = await query<NkrRaw>(
+      `${SELECT}
+       WHERE ${WHERE_BASE} AND (
+         n.Firma_ID = @firmaId
+         OR EXISTS (
+           SELECT 1 FROM NumuneDetay d
+           WHERE d.RaporID = n.ID AND d.ProjeID = @firmaId
+         )
+       )
+       ORDER BY o.YayinTarihi DESC, o.ID DESC`,
+      { firmaId: user.id }
+    );
   } else {
+    // Müşteri / diğer: yalnızca kendi numuneleri
     rows = await query<NkrRaw>(
       `${SELECT}
        WHERE ${WHERE_BASE} AND n.Firma_ID = @firmaId
@@ -161,6 +177,7 @@ async function findNkrRaporForUser(
     NumuneAd: string | null;
     YayinUrl: string | null;
     FirmaID: number | null;
+    ProjeMatch: number | null;
   }
   const r = await queryOne<NkrRow>(
     `SELECT
@@ -171,7 +188,9 @@ async function findNkrRaporForUser(
        o.RaporFormati,
        n.Numune_Adi AS NumuneAd,
        o.YayinUrl,
-       n.Firma_ID AS FirmaID
+       n.Firma_ID AS FirmaID,
+       (SELECT COUNT(*) FROM NumuneDetay d
+        WHERE d.RaporID = n.ID AND d.ProjeID = @uid) AS ProjeMatch
      FROM NKR_RaporOnay o
      INNER JOIN NKR n ON n.ID = o.NkrID
      LEFT JOIN Firma f ON f.ID = n.Firma_ID
@@ -180,14 +199,17 @@ async function findNkrRaporForUser(
        AND TRIM(o.YayinUrl) <> ''
        AND n.Durum = 'Aktif'
      LIMIT 1`,
-    { oid: onayId }
+    { oid: onayId, uid: user.id }
   );
   if (!r) return null;
 
   if (!isAdmin(user)) {
-    if (user.tur === "Müşteri" && r.FirmaID !== user.id) return null;
-    if (user.tur === "Proje" && r.FirmaID !== user.id) return null;
     if (user.tur === "Plasiyer") return null;
+    // Müşteri: yalnızca kendi numunesi. Proje: kendi numunesi VEYA
+    // NumuneDetay.ProjeID üzerinden kendisine bağlı müşteri numunesi.
+    const sahip = r.FirmaID === user.id;
+    const projeMatch = user.tur === "Proje" && (r.ProjeMatch ?? 0) > 0;
+    if (!sahip && !projeMatch) return null;
   }
 
   return {
