@@ -12,6 +12,8 @@ export interface RaporListItem {
   "Dosya Türü": string | null;
   "Dosya Adı": string | null;
   RaporID: string | null;
+  /** Müşteriye gösterilen dış rapor kodu (ör. "ÜGAM/GE26/K6HV"). */
+  RaporKodu: string | null;
   Yol: string | null;
 }
 
@@ -58,8 +60,10 @@ interface NkrRaw {
   NkrID: number;
   Tarih: Date | null;
   RaporNo: number | null;
+  DisRaporKodu: string | null;
   TalepNo: number | null;
   MusteriAd: string | null;
+  ProjeAd: string | null;
   RaporFormati: string | null;
   NumuneAd: string | null;
   YayinUrl: string | null;
@@ -72,8 +76,12 @@ async function listYayinlanmisNkrRaporlari(
     SELECT
       -o.ID AS OnayID, n.ID AS NkrID,
       o.YayinTarihi AS Tarih,
-      n.RaporNo, CAST(n.Talep_No AS SIGNED) AS TalepNo,
+      n.RaporNo, o.DisRaporKodu, CAST(n.Talep_No AS SIGNED) AS TalepNo,
       f.Firma_Adi AS MusteriAd,
+      (SELECT p.Firma_Adi FROM NumuneDetay d
+         JOIN Firma p ON p.ID = d.ProjeID
+        WHERE d.RaporID = n.ID AND d.ProjeID IS NOT NULL
+        ORDER BY d.ID LIMIT 1) AS ProjeAd,
       o.RaporFormati,
       n.Numune_Adi AS NumuneAd,
       o.YayinUrl
@@ -130,10 +138,11 @@ async function listYayinlanmisNkrRaporlari(
     "Dosya No": r.RaporNo ?? r.NkrID,
     TalepNo: r.TalepNo,
     "Müşteri": r.MusteriAd,
-    Proje: null,
+    Proje: r.ProjeAd,
     "Dosya Türü": r.RaporFormati ?? "Rapor",
     "Dosya Adı": r.NumuneAd,
     RaporID: r.RaporNo != null ? `R-${r.RaporNo}` : null,
+    RaporKodu: r.DisRaporKodu?.trim() || null,
     Yol: r.YayinUrl,
   }));
 }
@@ -171,6 +180,7 @@ async function findNkrRaporForUser(
     NkrID: number;
     Tarih: Date | null;
     RaporNo: number | null;
+    DisRaporKodu: string | null;
     TalepNo: number | null;
     MusteriAd: string | null;
     RaporFormati: string | null;
@@ -183,7 +193,7 @@ async function findNkrRaporForUser(
     `SELECT
        o.ID AS OnayID, n.ID AS NkrID,
        o.YayinTarihi AS Tarih,
-       n.RaporNo, CAST(n.Talep_No AS SIGNED) AS TalepNo,
+       n.RaporNo, o.DisRaporKodu, CAST(n.Talep_No AS SIGNED) AS TalepNo,
        f.Firma_Adi AS MusteriAd,
        o.RaporFormati,
        n.Numune_Adi AS NumuneAd,
@@ -222,6 +232,7 @@ async function findNkrRaporForUser(
     "Dosya Türü": r.RaporFormati ?? "Rapor",
     "Dosya Adı": r.NumuneAd,
     RaporID: r.RaporNo != null ? `R-${r.RaporNo}` : null,
+    RaporKodu: r.DisRaporKodu?.trim() || null,
     Yol: r.YayinUrl,
   };
 }

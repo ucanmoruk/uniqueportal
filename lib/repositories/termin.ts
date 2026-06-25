@@ -7,6 +7,8 @@ export interface TerminListItem {
   nID: number | null;
   "Evrak No": number | null;
   "Rapor No": number | null;
+  /** Müşteriye gösterilen dış rapor kodu (ör. "ÜGAM/GE26/K6HV"). */
+  RaporKodu: string | null;
   Firma: string | null;
   Proje: string | null;
   Numune: string | null;
@@ -52,7 +54,12 @@ const RAPOR_HARIC_WHERE = `
 
 const SELECT_BASE = `
   SELECT
-    v.ID, v.nID, v.\`Evrak No\`, v.\`Rapor No\`, v.Firma, v.Proje, v.Numune,
+    v.ID, v.nID, v.\`Evrak No\`, v.\`Rapor No\`,
+    (SELECT o2.DisRaporKodu FROM NKR_RaporOnay o2
+       WHERE o2.NkrID = v.nID
+         AND o2.DisRaporKodu IS NOT NULL AND TRIM(o2.DisRaporKodu) <> ''
+       ORDER BY o2.ID DESC LIMIT 1) AS RaporKodu,
+    v.Firma, v.Proje, v.Numune,
     v.Hizmet, v.Method, v.Kabul, v.Termin,
     ${DURUM_EXPR} AS Durum,
     v.Rapor, v.Yetkili

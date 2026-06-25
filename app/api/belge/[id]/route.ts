@@ -128,7 +128,7 @@ export async function GET(
     );
   }
 
-  const raporNo = rapor["Dosya No"];
+  const raporNo = rapor.RaporKodu ?? rapor["Dosya No"];
   const urunAdi = rapor["Dosya Adı"] ?? "";
   const baseName = urunAdi
     ? `${raporNo} - ${urunAdi}`
@@ -137,13 +137,21 @@ export async function GET(
     .replace(/[^a-zA-Z0-9ÇĞİÖŞÜçğıöşü._\s-]+/g, "_")
     .trim()
     .concat(".pdf");
+  // HTTP başlık değerleri Latin1 (≤255) olmak zorunda. Türkçe karakterler
+  // (ı=305, ş=351, ğ=287…) ham filename="" içinde ByteString hatası fırlatır.
+  // RFC 6266/5987: ASCII fallback + filename*=UTF-8'' ile çift değer veriyoruz.
+  const asciiName = niceName.replace(/[^\x20-\x7E]/g, "_");
+  const encodedName = encodeURIComponent(niceName);
+  const disposition =
+    `${download ? "attachment" : "inline"}; ` +
+    `filename="${asciiName}"; filename*=UTF-8''${encodedName}`;
 
   return new NextResponse(new Uint8Array(result.buf), {
     status: 200,
     headers: {
       "Content-Type": "application/pdf",
       "Content-Length": String(result.buf.length),
-      "Content-Disposition": `${download ? "attachment" : "inline"}; filename="${niceName}"`,
+      "Content-Disposition": disposition,
       "Cache-Control": "private, max-age=300",
       "X-Content-Type-Options": "nosniff",
     },

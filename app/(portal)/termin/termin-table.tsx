@@ -24,8 +24,8 @@ export function TerminTable({
     {
       key: "rapor",
       header: "Rapor No",
-      accessor: (r) => r["Rapor No"] ?? 0,
-      cell: (r) => r["Rapor No"] ?? "—",
+      accessor: (r) => r.RaporKodu ?? "",
+      cell: (r) => r.RaporKodu ?? "—",
     },
     {
       key: "firma",

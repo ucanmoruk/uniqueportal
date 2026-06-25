@@ -77,9 +77,9 @@ export function BelgelerTable({
     {
       key: "no",
       header: "Rapor No",
-      accessor: (r) => r["Dosya No"],
+      accessor: (r) => r.RaporKodu ?? r["Dosya No"],
       cell: (r) => (
-        <span className="font-medium">{r["Dosya No"]}</span>
+        <span className="font-medium">{r.RaporKodu ?? r["Dosya No"]}</span>
       ),
     },
     {
@@ -137,7 +137,7 @@ export function BelgelerTable({
             onClick={() =>
               setPdfViewer({
                 src: `/api/belge/${r.ID}`,
-                title: r["Dosya Adı"] ?? `Rapor ${r["Dosya No"]}`,
+                title: r["Dosya Adı"] ?? `Rapor ${r.RaporKodu ?? r["Dosya No"]}`,
               })
             }
             className="inline-flex items-center gap-1 border bg-background px-2.5 py-1 text-xs font-medium hover:bg-accent hover:text-accent-foreground"
