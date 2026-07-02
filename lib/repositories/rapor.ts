@@ -93,6 +93,7 @@ async function listYayinlanmisNkrRaporlari(
     o.YayinUrl IS NOT NULL
     AND TRIM(o.YayinUrl) <> ''
     AND n.Durum = 'Aktif'
+    AND (o.Durum IS NULL OR o.Durum <> 'Geçersiz')
   `;
 
   let rows: NkrRaw[];
@@ -208,6 +209,7 @@ async function findNkrRaporForUser(
        AND o.YayinUrl IS NOT NULL
        AND TRIM(o.YayinUrl) <> ''
        AND n.Durum = 'Aktif'
+       AND (o.Durum IS NULL OR o.Durum <> 'Geçersiz')
      LIMIT 1`,
     { oid: onayId, uid: user.id }
   );
