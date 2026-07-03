@@ -20,7 +20,16 @@ export interface RaporListItem {
 export async function listRaporlar(
   user: SessionUser
 ): Promise<RaporListItem[]> {
-  return listYayinlanmisNkrRaporlari(user);
+  // NKR test raporları + lab'dan yüklenen manuel belgeler (Yol tam URL, http…).
+  const [nkr, manuel] = await Promise.all([
+    listYayinlanmisNkrRaporlari(user),
+    listManuelRaporlar(user),
+  ]);
+  return [...nkr, ...manuel].sort((a, b) => {
+    const ta = a.Tarih ? new Date(a.Tarih).getTime() : 0;
+    const tb = b.Tarih ? new Date(b.Tarih).getTime() : 0;
+    return tb - ta;
+  });
 }
 
 async function listManuelRaporlar(
@@ -30,7 +39,7 @@ async function listManuelRaporlar(
     return query<RaporListItem>(
       `SELECT ID, Tarih, \`Dosya No\`, TalepNo, \`Müşteri\`, Proje,
               \`Dosya Türü\`, \`Dosya Adı\`, RaporID, Yol
-       FROM VIEW_RAPOR WHERE Durum = 'Aktif'
+       FROM VIEW_RAPOR WHERE Durum = 'Aktif' AND Yol LIKE 'http%'
        ORDER BY Tarih DESC, ID DESC`
     );
   }
@@ -39,7 +48,7 @@ async function listManuelRaporlar(
       `SELECT ID, Tarih, \`Dosya No\`, TalepNo, \`Müşteri\`, Proje,
               \`Dosya Türü\`, \`Dosya Adı\`, RaporID, Yol
        FROM VIEW_RAPOR
-       WHERE Durum = 'Aktif' AND PlasiyerID = @pid
+       WHERE Durum = 'Aktif' AND Yol LIKE 'http%' AND PlasiyerID = @pid
        ORDER BY Tarih DESC, ID DESC`,
       { pid: user.plasiyerId ?? -1 }
     );
@@ -49,7 +58,7 @@ async function listManuelRaporlar(
     `SELECT ID, Tarih, \`Dosya No\`, TalepNo, \`Müşteri\`, Proje,
             \`Dosya Türü\`, \`Dosya Adı\`, RaporID, Yol
      FROM VIEW_RAPOR
-     WHERE Durum = 'Aktif' AND ${scope.clause}
+     WHERE Durum = 'Aktif' AND Yol LIKE 'http%' AND ${scope.clause}
      ORDER BY Tarih DESC, ID DESC`,
     scope.params
   );
