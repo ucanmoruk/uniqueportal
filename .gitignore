@@ -45,3 +45,6 @@ next-env.d.ts
 /deploy/output/
 /deploy/portal-deploy.zip
 /deploy/portal-deploy.tar.gz
+
+# TT Interphases Pro Trial fontları (lisans — repoya konmaz)
+/public/fonts/

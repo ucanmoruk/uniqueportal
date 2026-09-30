@@ -240,7 +240,7 @@ export default async function OzetPage() {
         <CardContent className="p-0">
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
-              <thead className="bg-muted/20 text-muted-foreground border-b">
+              <thead className="bg-muted/20 text-muted-foreground border-b font-mono">
                 <tr className="text-left">
                   <th className="px-6 py-2.5 font-medium text-xs uppercase tracking-wide">
                     Talep No

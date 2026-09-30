@@ -106,7 +106,7 @@ function NavContent({
     .toUpperCase();
 
   return (
-    <div className="flex flex-col h-full w-full overflow-hidden">
+    <div className="flex flex-col h-full w-full overflow-hidden font-mono">
       {/* Brand + collapse toggle — sabit üst alan */}
       <div className={cn(
         "border-b border-sidebar-border flex items-center shrink-0",

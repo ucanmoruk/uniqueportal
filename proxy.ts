@@ -18,6 +18,7 @@ export default auth((req) => {
     pathname.startsWith("/_next") ||
     pathname.startsWith("/favicon") ||
     pathname.startsWith("/logo") ||
+    pathname.startsWith("/fonts") ||
     isApiAuth ||
     isPublicApi;
 

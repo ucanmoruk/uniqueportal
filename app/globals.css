@@ -41,15 +41,40 @@
   --uq-button-padding-y: var(--uq-spacing-3);  /* 12px */
 }
 
-/* ---- Font override ---------------------------------------------
- * Portal genelinde tek font ailesi: JetBrains Mono.
- * (UNIQUE design system default'u TT Interphases Pro sans; ürün
- * kararıyla geçici olarak değil — tüm portal mono.)
- * Hem sans hem mono token'ları aynı aileye yönlendiriliyor.
+/* ---- TT Interphases Pro (Trial) — @font-face --------------------
+ * Hibrit tipografi: başlıklar JetBrains Mono (kimlik), gövde/paragraf
+ * TT Interphases Pro (okunurluk). Trial lisans — canlıya çıkmadan tam
+ * lisans alınmalı; dosyalar git'e konmaz (public/fonts .gitignore'da).
+ */
+@font-face {
+  font-family: "TT Interphases Pro";
+  src: url("/fonts/TTInterphasesPro-Regular.ttf") format("truetype");
+  font-weight: 400; font-style: normal; font-display: swap;
+}
+@font-face {
+  font-family: "TT Interphases Pro";
+  src: url("/fonts/TTInterphasesPro-Medium.ttf") format("truetype");
+  font-weight: 500; font-style: normal; font-display: swap;
+}
+@font-face {
+  font-family: "TT Interphases Pro";
+  src: url("/fonts/TTInterphasesPro-DemiBold.ttf") format("truetype");
+  font-weight: 600; font-style: normal; font-display: swap;
+}
+@font-face {
+  font-family: "TT Interphases Pro";
+  src: url("/fonts/TTInterphasesPro-Bold.ttf") format("truetype");
+  font-weight: 700; font-style: normal; font-display: swap;
+}
+
+/* ---- Font override — HİBRİT --------------------------------------
+ *   sans → TT Interphases Pro  (gövde, paragraf, tablolar, formlar)
+ *   mono → JetBrains Mono       (başlıklar, kart başlıkları, eyebrow)
+ * Tek font'a dönmek için sans'ı tekrar mono değişkenine yönlendir.
  */
 :root {
-  --uq-font-family-sans: var(--font-mono-fallback), "JetBrains Mono",
-    ui-monospace, monospace;
+  --uq-font-family-sans: "TT Interphases Pro", system-ui, -apple-system,
+    "Segoe UI", sans-serif;
   --uq-font-family-mono: var(--font-mono-fallback), "JetBrains Mono",
     ui-monospace, monospace;
 }
@@ -258,8 +283,9 @@
     font-feature-settings: "cv11", "ss01", "calt";
     letter-spacing: -0.005em;
   }
+  /* Başlıklar → JetBrains Mono (kimlik katmanı). Gövde/paragraf sans. */
   h1, h2, h3, h4, h5, h6 {
-    font-family: var(--uq-font-family-sans);
+    font-family: var(--uq-font-family-mono);
     letter-spacing: var(--uq-font-letter-spacing-tight);
     line-height: var(--uq-font-line-height-tight);
   }
@@ -433,6 +459,7 @@
     gap: var(--uq-spacing-3);
   }
   .uq-card__title {
+    font-family: var(--uq-font-family-mono);
     font-size: var(--uq-font-size-md);
     font-weight: var(--uq-font-weight-semibold);
     line-height: 1.2;
@@ -450,8 +477,9 @@
   }
 
   /* ---------- Eyebrow / label helper ---------- */
+  /* Uppercase tracked etiketler kimlik öğesi — mono. */
   .uq-eyebrow {
-    font-family: var(--uq-font-family-sans);
+    font-family: var(--uq-font-family-mono);
     font-size: var(--uq-font-size-xs);
     font-weight: var(--uq-font-weight-medium);
     letter-spacing: var(--uq-font-letter-spacing-wider);

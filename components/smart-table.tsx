@@ -409,7 +409,7 @@ export function SmartTable<T extends object>({
       {/* Table */}
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
-          <thead className="bg-muted/20 text-muted-foreground border-b">
+          <thead className="bg-muted/20 text-muted-foreground border-b font-mono">
             <tr className="text-left">
               {selectable && (
                 <th className="px-3 py-2.5 w-8">
