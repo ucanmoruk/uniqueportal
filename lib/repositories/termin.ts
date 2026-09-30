@@ -7,7 +7,7 @@ export interface TerminListItem {
   nID: number | null;
   "Evrak No": number | null;
   "Rapor No": number | null;
-  /** Müşteriye gösterilen dış rapor kodu (ör. "ÜGAM/GE26/K6HV"). */
+  /** Müşteriye gösterilen dış rapor kodu (ör. "UGAM/GE26/K6HV"). */
   RaporKodu: string | null;
   Firma: string | null;
   Proje: string | null;
@@ -73,7 +73,7 @@ export async function listTermin(user: SessionUser): Promise<TerminListItem[]> {
     return query<TerminListItem>(
       `${SELECT_BASE}
        WHERE ${RAPOR_HARIC_WHERE}
-       ORDER BY v.Termin DESC, v.nID DESC
+       ORDER BY v.Kabul ASC, v.nID ASC
        LIMIT 500`
     );
   }
@@ -90,7 +90,7 @@ export async function listTermin(user: SessionUser): Promise<TerminListItem[]> {
   return query<TerminListItem>(
     `${SELECT_BASE}
      WHERE ${RAPOR_HARIC_WHERE} AND ${whereSahiplik}
-     ORDER BY v.Termin DESC, v.nID DESC
+     ORDER BY v.Kabul ASC, v.nID ASC
      LIMIT 500`,
     { firma: user.firmaAdi }
   );

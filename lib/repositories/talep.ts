@@ -179,7 +179,8 @@ function randomKod(uzunluk = 4): string {
 
 function uretDisTalepKodu(now = new Date()): string {
   const yil = String(now.getFullYear()).slice(2);
-  return `ÜGAM/${yil}/${randomKod(4)}`;
+  // Kod önekinde her zaman "UGAM" (ASCII U) kullanılır — "Ü" değil.
+  return `UGAM/${yil}/${randomKod(4)}`;
 }
 
 export interface PublicTalepInput {

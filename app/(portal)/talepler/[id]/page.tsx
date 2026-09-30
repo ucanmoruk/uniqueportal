@@ -29,7 +29,7 @@ export default async function TalepDetailPage({
 
   if (!talep) notFound();
 
-  // Görüntülenecek talep no — yeni format `ÜGAM/26/XXXX`, eski kayıtlar `UQ<no>`
+  // Görüntülenecek talep no — yeni format `UGAM/26/XXXX`, eski kayıtlar `UQ<no>`
   const talepEtiket = talep.DisTalepKodu ?? `UQ${talep.TalepNo}`;
   const iptalEdilebilir = talep.Durum === "Yeni Talep";
 

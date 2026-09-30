@@ -8,7 +8,7 @@ import { iptalTalepAction } from "./actions";
 
 interface Props {
   talepId: number;
-  talepNo: string; // Görsel etiket (ÜGAM/26/XXXX veya UQ193)
+  talepNo: string; // Görsel etiket (UGAM/26/XXXX veya UQ193)
 }
 
 export function IptalTalepButton({ talepId, talepNo }: Props) {

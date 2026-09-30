@@ -55,9 +55,14 @@ const SELECT_LIST = `
   LEFT JOIN Firma m ON m.ID = tb.MusteriID
 `;
 
+// Müşteriye yalnızca "gönderilmiş" teklifler gösterilir. TeklifDurum'u NULL
+// veya 'Taslak' olanlar iç portalda henüz gönderilmemiş taslaklardır ve
+// müşteriye görünmemelidir (listede durum "-" olarak beliriyordu).
+const VISIBLE_DURUMLAR = `('Onay Bekleniyor', 'Onaylandı', 'Reddedildi')`;
+
 const VISIBILITY_WHERE = `
   tb.Durum = 'Aktif'
-  AND (tb.TeklifDurum IS NULL OR tb.TeklifDurum NOT IN ('Taslak','Hazırlanıyor','Hazirlaniyor','Draft'))
+  AND tb.TeklifDurum IN ${VISIBLE_DURUMLAR}
 `;
 
 void DRAFT_DURUMLAR;
@@ -255,7 +260,7 @@ export async function findTeklifByListId(id: number) {
   const r = await queryOne<{ ID: number }>(
     `SELECT ID FROM TeklifBaslik
      WHERE ID = @id AND Durum = 'Aktif'
-       AND (TeklifDurum IS NULL OR TeklifDurum NOT IN ('Taslak','Hazırlanıyor','Hazirlaniyor','Draft'))
+       AND TeklifDurum IN ${VISIBLE_DURUMLAR}
      LIMIT 1`,
     { id }
   );

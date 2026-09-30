@@ -12,7 +12,7 @@ export interface RaporListItem {
   "Dosya Türü": string | null;
   "Dosya Adı": string | null;
   RaporID: string | null;
-  /** Müşteriye gösterilen dış rapor kodu (ör. "ÜGAM/GE26/K6HV"). */
+  /** Müşteriye gösterilen dış rapor kodu (ör. "UGAM/GE26/K6HV"). */
   RaporKodu: string | null;
   Yol: string | null;
 }
