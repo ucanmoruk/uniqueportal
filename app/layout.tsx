@@ -17,6 +17,7 @@ const jetbrains = JetBrains_Mono({
 export const metadata: Metadata = {
   title: "UNIQUE Services Portal",
   description: "Kozmetik test ve analiz hizmetleri portalı",
+  robots: { index: false, follow: false, nocache: true },
   icons: { icon: "/favicon.png" },
 };
 

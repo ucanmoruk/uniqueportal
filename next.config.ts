@@ -31,7 +31,16 @@ const nextConfig: NextConfig = {
   serverExternalPackages: ["mssql", "tedious"],
   poweredByHeader: false,
   async headers() {
-    return [{ source: "/:path*", headers: securityHeaders }];
+    return [
+      { source: "/:path*", headers: securityHeaders },
+      {
+        source: "/:path*",
+        has: [{ type: "host", value: "portal\\.uniqueanalyse\\.com" }],
+        headers: [
+          { key: "X-Robots-Tag", value: "noindex, nofollow, noarchive" },
+        ],
+      },
+    ];
   },
 };
 
