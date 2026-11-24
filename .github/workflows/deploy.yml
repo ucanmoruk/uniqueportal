@@ -42,6 +42,9 @@ jobs:
           # preloadEntriesOnStart kapat (startup sirasinda fazla process acmasin)
           sed -i 's/"preloadEntriesOnStart":true/"preloadEntriesOnStart":false/g' deploy-package/server.js
 
+          # Passenger yeni build'i yüklesin; mevcut ortam dosyaları korunur.
+          date -u +"%Y-%m-%dT%H:%M:%SZ build:${GITHUB_SHA}" > deploy-package/tmp/restart.txt
+
       - name: Deploy via FTP
         uses: SamKirkland/FTP-Deploy-Action@v4.3.5
         with:
@@ -58,5 +61,5 @@ jobs:
       - name: Post-deploy notice
         run: |
           echo "✅ Dosyalar deploy edildi."
-          echo "⚠️  cPanel > Setup Node.js App > RESTART butonuna basın."
-          echo "   (Shared hosting'te otomatik restart desteklenmiyor)"
+          echo "Passenger restart işareti tmp/restart.txt ile gönderildi."
+          echo "Canlı HTTP yanıtları ayrıca doğrulanmalıdır."
