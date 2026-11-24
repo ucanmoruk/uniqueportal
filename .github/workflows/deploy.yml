@@ -42,8 +42,6 @@ jobs:
           # preloadEntriesOnStart kapat (startup sirasinda fazla process acmasin)
           sed -i 's/"preloadEntriesOnStart":true/"preloadEntriesOnStart":false/g' deploy-package/server.js
 
-          # Passenger yeni build'i yüklesin; mevcut ortam dosyaları korunur.
-          date -u +"%Y-%m-%dT%H:%M:%SZ build:${GITHUB_SHA}" > deploy-package/tmp/restart.txt
 
       - name: Deploy via FTP
         uses: SamKirkland/FTP-Deploy-Action@v4.3.5
@@ -57,6 +55,24 @@ jobs:
           exclude: |
             .git*
             .git*/**
+
+      # Restart işareti ana FTP senkronundan SONRA aktarılmalı. Ana paket içinde
+      # olursa dosya sırası yüzünden uygulama eski chunk'larla yeniden açılabilir.
+      - name: Prepare restart signal
+        run: |
+          mkdir -p restart-package/tmp
+          date -u +"%Y-%m-%dT%H:%M:%SZ build:${GITHUB_SHA}" > restart-package/tmp/restart.txt
+
+      - name: Restart Passenger after file transfer
+        uses: SamKirkland/FTP-Deploy-Action@v4.3.5
+        with:
+          server: ${{ secrets.FTP_HOST }}
+          username: ${{ secrets.FTP_USER }}
+          password: ${{ secrets.FTP_PASS }}
+          local-dir: ./restart-package/
+          server-dir: ./home/uniqueanalyse/portal.uniqueanalyse.com/
+          state-name: .restart-sync-state.json
+          dangerous-clean-slate: false
 
       - name: Post-deploy notice
         run: |
